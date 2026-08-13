@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     # tier caps tokens per minute, and because old turns stop being useful.
     history_limit: int = 20
 
+    # Voice budget per session. Audio spends far more tokens per minute than
+    # text, and the free tier caps tokens per minute rather than requests, so
+    # one long conversation could leave the next visitor with a mute demo.
+    # Measured basis: a turn costs roughly 300-500 tokens against a 65K/min
+    # ceiling, so this is generous for one runner and still bounded.
+    voice_max_seconds: float = 300.0
+
+    # No wait on the Live socket is unbounded: with input the model does not
+    # recognise as speech, no turn ever completes and a naive loop hangs.
+    voice_idle_timeout: float = 60.0
+
     @property
     def gemini_enabled(self) -> bool:
         return bool(self.google_api_key.strip())

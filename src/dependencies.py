@@ -11,11 +11,17 @@ from functools import lru_cache
 
 from src.agents.coach_agent import CoachAgent
 from src.services.gemini_service import GeminiService
+from src.services.live_service import LiveVoiceService
 
 
 @lru_cache
 def get_gemini() -> GeminiService:
     return GeminiService()
+
+
+@lru_cache
+def get_live() -> LiveVoiceService:
+    return LiveVoiceService()
 
 
 @lru_cache

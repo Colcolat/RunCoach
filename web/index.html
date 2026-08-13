@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RunCoach</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <h1>RunCoach</h1>
+        <p class="tagline">Tu entrenador de running, en voz</p>
+      </header>
+
+      <div id="log" class="log" aria-live="polite"></div>
+
+      <p id="status" class="status">Listo para hablar o escribir</p>
+
+      <div class="controls">
+        <button id="talk" type="button" class="talk">Hablar</button>
+
+        <form id="composer" class="composer">
+          <input
+            id="text"
+            type="text"
+            placeholder="O escribe tu pregunta"
+            autocomplete="off"
+            maxlength="4000"
+          />
+          <button type="submit">Enviar</button>
+        </form>
+      </div>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
