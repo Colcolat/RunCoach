@@ -49,8 +49,8 @@ suite en verde y se comitea sólo después de haberse ejecutado.
 | Fragmento | Alcance | Estado |
 |---|---|---|
 | F0 | Esqueleto: aplicación, configuración, salud | Hecho |
-| F1 | Cerebro del coach: persona, reglas, chat de texto | Siguiente |
-| F2 | Voz conversacional con la Live API | Planeado |
+| F1 | Cerebro del coach: persona, reglas, chat de texto | Hecho |
+| F2 | Voz conversacional con la Live API | Siguiente |
 | F3 | Memoria entre sesiones | Planeado |
 | F4 | Perfil del corredor extraído de la conversación | Planeado |
 | F5 | Interfaz web | Planeado |
@@ -58,9 +58,29 @@ suite en verde y se comitea sólo después de haberse ejecutado.
 | F7 | Despliegue | Planeado |
 | F8 | Entrega | Planeado |
 
-Hoy corre: la aplicación arranca, `GET /health` reporta estado medido y la suite
-pasa. Nada más. Este README se actualiza conforme cada fragmento existe, no
-antes.
+Hoy corre: el coach responde preguntas de entrenamiento por texto contra el
+modelo real, con la persona y las reglas de seguridad aplicándose. Todavía no
+recuerda nada entre mensajes; esa es F3. Este README se actualiza conforme cada
+fragmento existe, no antes.
+
+Una conversación real contra la API, para que se vea el comportamiento:
+
+> **Corro 20 km por semana y quiero un 21K en diciembre. ¿Por dónde empiezo?**
+>
+> Veinte kilómetros semanales son una buena base para empezar a preparar un
+> medio maratón de cara a diciembre. Antes de armarte el plan exacto, dime qué
+> tiempo sueles tardar en hacer esos diez kilómetros o cinco kilómetros para
+> saber cómo estás de ritmo.
+
+Preguntó en lugar de suponer. Y bajo presión sostiene las reglas:
+
+> **Quiero llegar a 60 km la próxima semana, tengo prisa. Dame el plan.**
+>
+> Entiendo que tengas prisa, pero subir de veinte a sesenta kilómetros de golpe
+> es una receta segura para lesionarte. Como entrenador no puedo darte ese plan
+> porque nunca aumento el volumen semanal más de un diez por ciento, lo que
+> significa que esta semana pasarías de tus veinte actuales a veintidós
+> kilómetros como mucho.
 
 ---
 
@@ -160,6 +180,17 @@ uvicorn src.main:app --reload --port 8000
 
 La documentación interactiva queda en `http://localhost:8000/docs`.
 
+Para hablar con el coach sin cliente web todavía:
+
+```bash
+curl -s -X POST http://localhost:8000/api/chat -H "Content-Type: application/json" -d "{\"message\":\"Corro 20 km por semana, quiero un 21K\"}"
+```
+
+Sin `GOOGLE_API_KEY` la aplicación arranca igual: `/health` reporta
+`not_configured` y el coach responde con un mensaje de respaldo en lugar de
+fallar. Eso mantiene la suite y el chequeo de salud utilizables en integración
+continua.
+
 ---
 
 ## Pruebas
@@ -175,9 +206,18 @@ pytest --cov=src --cov-report=term-missing
 Las pruebas no tocan la red. El modelo y el bot se sustituyen por dobles, así
 que la suite es determinista y corre sin credenciales.
 
+64 pruebas, 87 por ciento de cobertura. Las reglas de entrenamiento y el agente
+están al 100; lo que falta es el camino de red del cliente, alcanzable solo
+gastando cuota.
+
 `GET /health` ejecuta una consulta real contra la base en lugar de devolver una
 respuesta fija, y hay una prueba que fuerza específicamente la rama degradada:
 un chequeo de salud que no puede fallar no informa nada.
+
+Las pruebas que más importan son las que fijan la seguridad: que el tope del
+diez por ciento aparece en el prompt para cualquier perfil, incluido el de un
+corredor avanzado; que un corredor de 5K no recibe guía de maratón; y que un
+fallo del modelo degrada en lugar de propagarse.
 
 ---
 
