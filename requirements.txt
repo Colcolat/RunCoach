@@ -1,0 +1,21 @@
+# Verified on Python 3.14.2: every pin resolves to a prebuilt wheel, so
+# `pip install -r requirements.txt --only-binary=:all:` succeeds without a
+# compiler. This file grows as the code that needs each package is written.
+
+# Web framework
+fastapi>=0.141,<0.142
+uvicorn[standard]>=0.52,<0.53
+pydantic>=2.13,<3
+pydantic-settings>=2.15,<3
+
+# Persistence
+SQLAlchemy>=2.0.52,<2.1
+
+# Configuration
+python-dotenv>=1.2,<2
+
+# Testing
+pytest>=9.1,<10
+pytest-asyncio>=1.4,<2
+pytest-cov>=7.1,<8
+httpx>=0.28,<0.29
