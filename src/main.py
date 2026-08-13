@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.config import get_settings
 from src.database import check_connection
+from src.services.db_service import create_schema
 from src.routes import chat, health, voice
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,8 @@ async def lifespan(app: FastAPI):
         level=settings.log_level,
         format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
     )
+
+    create_schema()
 
     if not check_connection():
         # Surfaced rather than fatal: /health should be reachable to report the

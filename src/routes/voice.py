@@ -25,9 +25,10 @@ import logging
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from google.genai import types
 
+from src.agents.coach_agent import CoachAgent
 from src.coaching.prompts import build_system_prompt
 from src.config import Settings, get_settings
-from src.dependencies import get_live
+from src.dependencies import get_coach, get_live
 from src.services.live_service import (
     INPUT_MIME,
     INPUT_SAMPLE_RATE,
@@ -76,29 +77,34 @@ async def _pump_microphone(
                 return "closed"
 
 
-async def _pump_model(websocket: WebSocket, session) -> None:
-    """Model to browser: audio to play, transcripts to display and to persist."""
+async def _pump_model(
+    websocket: WebSocket, session, coach: CoachAgent, session_id: str | None
+) -> None:
+    """Model to browser: audio to play, transcripts to display and to persist.
+
+    Transcripts arrive in fragments, so they are accumulated per speaker and
+    written once the turn completes. Saving each fragment would shred one
+    sentence across a dozen rows and make the replayed history unreadable.
+    """
+    spoken = {"user": [], "coach": []}
+
     async for reply in session.receive():
         content = reply.server_content
         if not content:
             continue
 
         if content.input_transcription and content.input_transcription.text:
+            fragment = content.input_transcription.text
+            spoken["user"].append(fragment)
             await websocket.send_json(
-                {
-                    "type": "transcript",
-                    "role": "user",
-                    "text": content.input_transcription.text,
-                }
+                {"type": "transcript", "role": "user", "text": fragment}
             )
 
         if content.output_transcription and content.output_transcription.text:
+            fragment = content.output_transcription.text
+            spoken["coach"].append(fragment)
             await websocket.send_json(
-                {
-                    "type": "transcript",
-                    "role": "coach",
-                    "text": content.output_transcription.text,
-                }
+                {"type": "transcript", "role": "coach", "text": fragment}
             )
 
         if content.model_turn:
@@ -108,13 +114,26 @@ async def _pump_model(websocket: WebSocket, session) -> None:
                     await websocket.send_bytes(blob.data)
 
         if content.turn_complete:
+            if session_id:
+                _persist_turn(coach, session_id, spoken)
+            spoken = {"user": [], "coach": []}
             await websocket.send_json({"type": "turn_complete"})
+
+
+def _persist_turn(coach: CoachAgent, session_id: str, spoken: dict) -> None:
+    """Write a completed spoken exchange into the same history as the text chat."""
+    for role, key in (("user", "user"), ("assistant", "coach")):
+        text = "".join(spoken[key]).strip()
+        if text:
+            coach.remember_voice_turn(session_id, role, text)
 
 
 @router.websocket("/ws/voice")
 async def voice(
     websocket: WebSocket,
+    session_id: str | None = None,
     live: LiveVoiceService = Depends(get_live),
+    coach: CoachAgent = Depends(get_coach),
     settings: Settings = Depends(get_settings),
 ) -> None:
     await websocket.accept()
@@ -140,7 +159,7 @@ async def voice(
             mic = asyncio.create_task(
                 _pump_microphone(websocket, session, budget, settings)
             )
-            model = asyncio.create_task(_pump_model(websocket, session))
+            model = asyncio.create_task(_pump_model(websocket, session, coach, session_id))
 
             # Whichever finishes first ends the session: the runner hung up, or
             # the model stream closed. The other is cancelled rather than left
