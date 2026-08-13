@@ -101,17 +101,27 @@ Cada elección está medida contra la API real, no supuesta.
 | Capa | Elección | Razón |
 |---|---|---|
 | API | FastAPI | Async nativo, tipado, documentación generada |
-| Voz | Gemini Live (`gemini-3.1-flash-live-preview`) | Audio bidireccional nativo; el navegador sólo necesita micrófono y WebSocket, así que funciona en cualquiera |
-| Texto | `gemini-3.5-flash-lite` | 1.26 s medidos, sin razonamiento interno que agregue latencia |
+| Voz | Gemini Live (modelo pendiente) | Audio bidireccional nativo; el navegador sólo necesita micrófono y WebSocket, así que funciona en cualquiera |
+| Texto | `gemini-3.5-flash-lite` | 1.26 s medidos, sin razonamiento interno; 500 requests/día vs. 20 de los modelos no-lite |
 | Persistencia | SQLite con SQLAlchemy 2.0 | Cero configuración; el ORM deja abierta la ruta a PostgreSQL |
 | Recordatorios | Telegram con APScheduler | Lo único que una pestaña cerrada no puede hacer |
 
-Sobre la elección de modelo: los modelos con razonamiento interno resultaron
-entre cinco y trece veces más lentos, y sus tokens de razonamiento se descuentan
-del presupuesto de salida. Con un presupuesto de 400 tokens, uno de ellos gastó
-382 pensando y emitió catorce caracteres. Para una conversación hablada, donde
-la latencia es la experiencia, el modelo ligero gana sin discusión y sostiene la
-calidad: respeta la regla del 10 por ciento con la aritmética correcta.
+**Sobre los modelos:** Los modelos con razonamiento interno resultaron entre cinco
+y trece veces más lentos, y sus tokens de razonamiento se descuentan del
+presupuesto de salida. Con un presupuesto de 400 tokens, uno gastó 382 pensando
+y emitió catorce caracteres. Para una conversación hablada, donde la latencia es
+la experiencia, el modelo ligero gana.
+
+**Sobre la voz:** Dos modelos Live cumplen. `gemini-3.1-flash-live-preview` tiene
+65K tokens/minuto; `gemini-2.5-flash-native-audio-latest` tiene 1M. El modelo
+elegido se decide en F2 midiendo consumo real de una conversación hablada, no a
+ojo. El tope de minutos de voz por sesión se dimensiona con la misma medición.
+
+**Restricción de cuota:** El tier gratuito da 500 requests/día para los modelos
+de texto. Gastar dos llamadas por turno (respuesta más extracción de perfil)
+reduciría la capacidad a 250 turnos diarios. La extracción de perfil (F4) se
+dispara solo cuando el turno plausiblemente trae información nueva, no en cada
+mensaje.
 
 ---
 
