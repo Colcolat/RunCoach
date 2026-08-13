@@ -8,6 +8,22 @@
  * falls back to when the voice budget runs out or the model is unreachable.
  */
 
+const SESSION_KEY = "runcoach.session";
+
+/**
+ * The session id is the only thing that identifies a returning runner: there is
+ * no login. Keeping it in localStorage means closing the tab does not erase the
+ * conversation, and losing it is indistinguishable from being a new visitor.
+ */
+function sessionId() {
+  let id = localStorage.getItem(SESSION_KEY);
+  if (!id) {
+    id = crypto.randomUUID().replace(/-/g, "");
+    localStorage.setItem(SESSION_KEY, id);
+  }
+  return id;
+}
+
 const state = {
   socket: null,
   audioContext: null,
@@ -121,7 +137,11 @@ async function startVoice() {
   }
 
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(`${protocol}//${location.host}/ws/voice`);
+  // The session id travels in the URL so the server can persist transcripts
+  // against the same conversation the text chat writes to.
+  const socket = new WebSocket(
+    `${protocol}//${location.host}/ws/voice?session_id=${encodeURIComponent(sessionId())}`
+  );
   socket.binaryType = "arraybuffer";
   state.socket = socket;
 
@@ -236,7 +256,7 @@ async function sendText(event) {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, session_id: sessionId() }),
     });
     const data = await response.json();
     addBubble("coach", data.reply);
@@ -255,6 +275,22 @@ async function boot() {
     else startVoice();
   });
   el("composer").addEventListener("submit", sendText);
+
+  // Replay first. A returning runner should find the conversation where they
+  // left it, not a greeting that pretends they have never been here.
+  try {
+    const stored = await fetch(`/api/history/${sessionId()}`);
+    const { messages } = await stored.json();
+    for (const message of messages) {
+      addBubble(message.role === "user" ? "user" : "coach", message.content);
+    }
+    if (messages.length) {
+      setStatus("Retomamos donde lo dejaste");
+      return;
+    }
+  } catch (error) {
+    // A history that cannot be read is not worth blocking the greeting on.
+  }
 
   try {
     const response = await fetch("/api/welcome");

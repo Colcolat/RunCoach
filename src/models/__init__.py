@@ -1,0 +1,20 @@
+"""Importing this package registers every model on the single Base.
+
+The imports are what populate Base.metadata, so create_all() sees all four
+tables and every ForeignKey resolves. A test asserts the registry contents for
+exactly that reason.
+"""
+
+from src.models.base import Base, utcnow
+from src.models.conversation import CHANNELS, ROLES, Conversation, Message
+from src.models.user import User
+
+__all__ = [
+    "Base",
+    "utcnow",
+    "User",
+    "Conversation",
+    "Message",
+    "ROLES",
+    "CHANNELS",
+]
