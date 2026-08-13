@@ -1,0 +1,163 @@
+/* Functional styling for F2. The designed interface arrives in F5; this exists
+   so the voice path can be used and demonstrated. */
+
+:root {
+  --bg: #0f1115;
+  --surface: #191d24;
+  --surface-raised: #222831;
+  --text: #e8eaed;
+  --muted: #9aa3ad;
+  --accent: #4ade80;
+  --accent-dim: #16653d;
+  --user: #2b3542;
+  --error: #f87171;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.log {
+  flex: 1;
+  min-height: 18rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  background: var(--surface);
+  border-radius: 0.75rem;
+}
+
+.bubble {
+  max-width: 85%;
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.bubble.coach {
+  align-self: flex-start;
+  background: var(--surface-raised);
+}
+
+.bubble.user {
+  align-self: flex-end;
+  background: var(--user);
+}
+
+/* A transcript still being spoken, so it is visibly not final yet. */
+.bubble.partial {
+  opacity: 0.7;
+}
+
+.status {
+  margin: 0;
+  min-height: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.status.listening {
+  color: var(--accent);
+}
+
+.status.speaking,
+.status.thinking {
+  color: var(--text);
+}
+
+.status.error {
+  color: var(--error);
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.talk {
+  padding: 0.85rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+
+.talk.active {
+  background: var(--error);
+  color: var(--text);
+}
+
+.composer {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.composer input {
+  flex: 1;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--surface-raised);
+  border-radius: 0.6rem;
+}
+
+.composer input:focus {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 1px;
+}
+
+.composer button {
+  padding: 0.7rem 1.1rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: none;
+  border-radius: 0.6rem;
+  cursor: pointer;
+}
+
+@media (max-width: 30rem) {
+  .composer {
+    flex-wrap: wrap;
+  }
+  .composer input {
+    min-width: 100%;
+  }
+}
