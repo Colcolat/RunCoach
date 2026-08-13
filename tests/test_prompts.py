@@ -78,10 +78,39 @@ def test_persona_demands_concrete_numbers():
 # --- profile handling --------------------------------------------------------
 
 
-def test_unknown_fields_become_explicit_instructions_to_ask():
+def test_unknown_fields_are_named_without_ordering_a_question():
+    """Regression: the coach asked for the same goal four times in a real session.
+
+    The system instruction is constant for the whole session, so a profile line
+    reading "ask for the goal" re-issued that order on every turn, including
+    turns after the runner had already answered. Missing fields are now
+    described, never commanded.
+    """
     prompt = build_system_prompt({})
-    assert "Objetivo: aún sin definir, pregúntalo" in prompt
-    assert "Nivel: aún sin definir, pregúntalo" in prompt
+
+    assert "Objetivo: sin registrar" in prompt
+    # The persona may still tell it how to ask; the profile must not tell it to.
+    assert "sin definir, pregúntalo" not in prompt
+    assert "sin saber, y lo necesitas" not in prompt
+
+
+def test_the_profile_is_framed_as_superseded_by_the_conversation():
+    prompt = build_system_prompt({})
+
+    assert "la conversación manda" in prompt
+
+
+def test_the_persona_forbids_repeating_an_answered_question():
+    prompt = build_system_prompt({})
+
+    assert "Nunca vuelvas a preguntar algo que la persona ya te dijo" in prompt
+
+
+def test_the_persona_says_when_to_stop_asking_and_deliver():
+    """Without this the model optimises for gathering and never commits."""
+    prompt = build_system_prompt({})
+
+    assert "deja de preguntar y da el plan" in prompt
 
 
 def test_known_profile_details_reach_the_prompt():
@@ -99,9 +128,15 @@ def test_known_profile_details_reach_the_prompt():
     assert "2026-12-06" in prompt
 
 
-def test_missing_mileage_explains_why_it_matters():
-    """The model should know the 10% rule is uncomputable without a baseline."""
-    assert "necesitas para calcular el diez por ciento" in build_system_prompt({})
+def test_a_missing_field_is_stated_rather_than_omitted():
+    """The model should see the gap, so it can ask once or assume out loud.
+
+    Omitting the line entirely would leave the model unaware anything is
+    missing; ordering it to ask produced the repeated-question loop instead.
+    """
+    prompt = build_system_prompt({})
+
+    assert "Volumen actual: sin registrar" in prompt
 
 
 # --- goal and level guidance -------------------------------------------------

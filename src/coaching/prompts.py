@@ -29,7 +29,20 @@ Da siempre números concretos: kilómetros, ritmos, días de la semana, series. 
 no sirve de nada; "sube de veinte a veintidós kilómetros esta semana" sí.
 
 Si te falta un dato que cambia tu respuesta (el objetivo, el nivel, cuánto corre ya), pregúntalo \
-en una sola frase antes de dar un plan. Una pregunta a la vez, no un cuestionario.
+en una sola frase. Una pregunta a la vez, no un cuestionario.
+
+CUANDO DEJAR DE PREGUNTAR
+La conversación siempre manda sobre el perfil. El perfil que aparece más abajo es lo que sabíamos \
+antes de empezar a hablar; si la persona ya te dio un dato durante la conversación, ese dato es el \
+bueno, aunque el perfil siga diciendo que falta.
+
+Nunca vuelvas a preguntar algo que la persona ya te dijo. Repetir una pregunta ya contestada es el \
+peor error que puedes cometer: destruye la sensación de estar hablando con alguien que escucha.
+
+En cuanto sepas el objetivo, más o menos el nivel y más o menos cuánto corre ahora, deja de \
+preguntar y da el plan. No necesitas nada más para empezar. Un plan concreto que después se ajusta \
+vale mucho más que otra pregunta, y si algún dato te falta, asúmelo de forma conservadora y dilo: \
+"voy a suponer que puedes correr tres días por semana; si no, lo ajustamos".
 
 REGLAS QUE NUNCA ROMPES
 Nunca subas el volumen semanal más de un diez por ciento respecto a la semana anterior. Es la \
@@ -95,10 +108,16 @@ ganas de entrenar.""",
 
 
 def _describe_profile(profile: dict) -> str:
-    """Render what is known about the runner, and name what is not.
+    """Render what was on record before this conversation started.
 
-    Unknown fields are stated explicitly rather than omitted, so the model asks
-    instead of inventing a plan on assumptions.
+    Missing fields are named but never carry an instruction to ask. The system
+    instruction is constant for the whole session, so a line reading "ask for
+    the goal" keeps ordering that on every turn, including turns after the
+    runner already answered. Observed in a real session: the coach asked for
+    the same goal four times and never produced a plan.
+
+    Wording here stays descriptive; when to ask and when to stop is decided
+    once, in the persona.
     """
     username = profile.get("username")
     goal = profile.get("goal")
@@ -107,14 +126,11 @@ def _describe_profile(profile: dict) -> str:
     race_date = profile.get("race_date")
 
     lines = [
-        f"Nombre: {username}" if username else "Nombre: aún sin saber",
-        f"Objetivo: {goal}" if goal else "Objetivo: aún sin definir, pregúntalo",
-        f"Nivel: {level}" if level else "Nivel: aún sin definir, pregúntalo",
+        f"Nombre: {username}" if username else "Nombre: sin registrar",
+        f"Objetivo: {goal}" if goal else "Objetivo: sin registrar",
+        f"Nivel: {level}" if level else "Nivel: sin registrar",
+        f"Volumen actual: {mileage} km por semana" if mileage else "Volumen actual: sin registrar",
     ]
-    if mileage:
-        lines.append(f"Volumen actual: {mileage} km por semana")
-    else:
-        lines.append("Volumen actual: aún sin saber, y lo necesitas para calcular el diez por ciento")
     if race_date:
         lines.append(f"Fecha de la carrera: {race_date}")
 
@@ -128,7 +144,12 @@ def build_system_prompt(profile: dict | None = None) -> str:
     ORM that arrives in F3.
     """
     profile = profile or {}
-    sections = [BASE_PERSONA, "PERFIL DEL CORREDOR\n" + _describe_profile(profile)]
+    sections = [
+        BASE_PERSONA,
+        "PERFIL REGISTRADO ANTES DE ESTA CONVERSACIÓN\n"
+        "(si la conversación dice otra cosa, la conversación manda)\n"
+        + _describe_profile(profile),
+    ]
 
     goal = profile.get("goal")
     if goal and goal in GOAL_GUIDANCE:

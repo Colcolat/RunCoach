@@ -116,28 +116,58 @@ falla. Es intencional; obliga a pensar si la nueva distancia debe estar ahí.
 ```python
 def _describe_profile(profile: dict) -> str:
     lines = [
-        f"Objetivo: {goal}" if goal else "Objetivo: aún sin definir, pregúntalo",
-        ...
+        f"Objetivo: {goal}" if goal else "Objetivo: sin registrar",
+        f"Nivel: {level}" if level else "Nivel: sin registrar",
+        f"Volumen actual: {mileage} km por semana" if mileage
+            else "Volumen actual: sin registrar",
     ]
-    if mileage:
-        lines.append(f"Volumen actual: {mileage} km por semana")
-    else:
-        lines.append("Volumen actual: aún sin saber, y lo necesitas para "
-                     "calcular el diez por ciento")
 ```
 
 El guion bajo inicial en `_describe_profile` es una convención de Python: indica
 que la función es interna al módulo. No lo impide técnicamente, pero comunica
 que no forma parte de la interfaz pública.
 
-La decisión de fondo: **los campos desconocidos se nombran, no se omiten.** Si
-el objetivo faltara y simplemente no apareciera en el texto, el modelo no tendría
-forma de saber que falta y armaría un plan sobre suposiciones. Al decirle
-"aún sin definir, pregúntalo", el modelo pregunta.
+**Los campos desconocidos se nombran, no se omiten.** Si el objetivo faltara y
+simplemente no apareciera, el modelo no tendría forma de saber que falta y
+armaría un plan sobre suposiciones silenciosas.
 
-La línea del volumen va más allá y explica *por qué* hace falta: sin un punto de
-partida, la regla del diez por ciento no se puede calcular. Darle el motivo al
-modelo produce mejores preguntas que darle solo la orden.
+Pero el texto es **descriptivo, nunca imperativo**, y eso viene de un fallo real.
+
+#### El bucle de preguntas
+
+La primera versión escribía `"Objetivo: aún sin definir, pregúntalo"`. Parecía
+razonable: si falta, que lo pregunte.
+
+En una sesión de voz real el coach preguntó el objetivo cuatro veces, preguntó
+el volumen tres veces y nunca llegó a dar un plan, pese a que el corredor había
+contestado todo en los primeros turnos.
+
+La causa: **la instrucción de sistema es constante durante toda la sesión.** En
+cada turno el modelo volvía a recibir la orden "el objetivo sigue sin definir,
+pregúntalo", aunque la conversación ya lo contuviera. Y la instrucción de sistema
+pesa más que el historial, así que ganaba la orden.
+
+El arreglo tiene tres partes:
+
+1. El perfil pasa a ser descriptivo: `"Objetivo: sin registrar"`, sin verbo.
+2. Se encabeza declarando quién manda:
+   `"PERFIL REGISTRADO ANTES DE ESTA CONVERSACIÓN (si la conversación dice otra
+   cosa, la conversación manda)"`.
+3. La persona gana una sección `CUANDO DEJAR DE PREGUNTAR`, que prohíbe repetir
+   una pregunta contestada y ordena entregar el plan en cuanto haya objetivo,
+   nivel aproximado y volumen aproximado, asumiendo en voz alta lo que falte.
+
+Repitiendo la misma conversación después del cambio: entrega plan desde el
+segundo turno, no vuelve a pedir el volumen ni una vez, y declara sus
+suposiciones ("vamos a suponer que puedes salir tres días por semana").
+
+La lección general: en un prompt de sistema, una instrucción condicional que
+depende del estado de la conversación no funciona, porque el prompt no se
+recalcula por turno. Lo que depende del estado tiene que ir en el historial o
+expresarse como regla, no como orden puntual.
+
+Este fallo no lo detectó ninguna de las 98 pruebas que había. Lo detectó usar la
+aplicación.
 
 ### Componer el prompt
 
