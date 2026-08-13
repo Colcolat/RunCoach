@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from src.config import get_settings
 from src.database import check_connection
-from src.routes import health
+from src.routes import chat, health
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,9 @@ async def lifespan(app: FastAPI):
         # Surfaced rather than fatal: /health should be reachable to report the
         # problem, which is precisely when an operator needs it most.
         logger.error("Database unreachable at startup")
+
+    if not settings.gemini_enabled:
+        logger.warning("GOOGLE_API_KEY not set - the coach will reply in degraded mode")
 
     logger.info("RunCoach started")
     yield
@@ -46,3 +49,4 @@ async def unhandled_exception_handler(request, exc):
 
 
 app.include_router(health.router)
+app.include_router(chat.router)
