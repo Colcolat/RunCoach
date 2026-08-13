@@ -221,6 +221,17 @@ fallo del modelo degrada en lugar de propagarse.
 
 ---
 
+## Recorrido por el código
+
+[`docs/recorrido/`](docs/recorrido/) explica cada fragmento archivo por archivo:
+qué hace, por qué está escrito así y qué error concreto evita cada decisión. Es
+el razonamiento que un diff no muestra.
+
+- [F0: el esqueleto](docs/recorrido/f0-esqueleto.md)
+- [F1: el cerebro del coach](docs/recorrido/f1-cerebro-del-coach.md)
+
+---
+
 ## Alcance excluido a propósito
 
 Se documenta para que las ausencias se lean como decisiones y no como olvidos.
