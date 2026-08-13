@@ -51,17 +51,19 @@ suite en verde y se comitea sólo después de haberse ejecutado.
 | F0 | Esqueleto: aplicación, configuración, salud | Hecho |
 | F1 | Cerebro del coach: persona, reglas, chat de texto | Hecho |
 | F2 | Voz conversacional con la Live API | Hecho |
-| F3 | Memoria entre sesiones | Siguiente |
-| F4 | Perfil del corredor extraído de la conversación | Planeado |
+| F3 | Memoria entre sesiones | Hecho |
+| F4 | Perfil del corredor extraído de la conversación | Siguiente |
 | F5 | Interfaz web | Planeado |
 | F6 | Recordatorios proactivos por Telegram | Planeado |
 | F7 | Despliegue | Planeado |
 | F8 | Entrega | Planeado |
 
 Hoy corre: se le puede **hablar** y contesta con voz, en cualquier navegador con
-micrófono. También responde por escrito. La persona y las reglas de seguridad se
-aplican en ambos caminos. Todavía no recuerda nada entre mensajes; esa es F3.
-Este README se actualiza conforme cada fragmento existe, no antes.
+micrófono. También responde por escrito. **Y recuerda**: la conversación persiste
+entre recargas, y hablar y escribir alimentan un mismo historial, así que se
+puede empezar por voz y seguir por texto sin perder el hilo. Todavía no extrae un
+perfil estructurado de lo que se le cuenta; esa es F4. Este README se actualiza
+conforme cada fragmento existe, no antes.
 
 Una conversación hablada real, verificada de punta a punta contra la API:
 
@@ -117,10 +119,10 @@ Navegador                             Telegram (F6)
               |                     |
               +==========+==========+
                          |
-        +================+========. . . . . .+
+        +================+===================+
         |                |                   |
     Reglas de      Gemini texto        Persistencia
-  entrenamiento    + Gemini Live        (SQLite, F3)
+  entrenamiento    + Gemini Live          (SQLite)
 ```
 
 El navegador nunca ve la clave de API: cada trama de audio pasa por el servidor.
@@ -248,9 +250,24 @@ pytest --cov=src --cov-report=term-missing
 Las pruebas no tocan la red. El modelo y el bot se sustituyen por dobles, así
 que la suite es determinista y corre sin credenciales.
 
-98 pruebas, 87 por ciento de cobertura. Las reglas de entrenamiento y el agente
-están al 100; lo que falta es el camino de red de los clientes, alcanzable solo
-gastando cuota.
+125 pruebas sin red, 91 por ciento de cobertura. Las reglas de entrenamiento, el
+agente y la persistencia están al 100; lo que falta es el camino de red de los
+clientes.
+
+Hay además seis pruebas que **sí** llaman al modelo real, porque verifican algo
+que ninguna prueba con dobles puede: que el coach *obedezca* sus reglas, no que
+las tenga escritas. Esa distinción no es teórica. La regla del diez por ciento
+estaba en el prompt y tenía cuatro pruebas, y aun así el coach le propuso 14 km
+semanales a alguien que corría 3.
+
+```bash
+pytest -m live
+```
+
+Gastan cuota, así que están excluidas de la ejecución normal, y van limitadas a
+una llamada cada 4.2 segundos: a toda velocidad se pasan de las quince peticiones
+por minuto del nivel gratuito y fallan con errores 429 que se leen como fallos de
+comportamiento.
 
 La voz se prueba contra una sesión Live falsa que reproduce un guion de mensajes
 del servidor. Eso cubre el protocolo del WebSocket, el presupuesto de voz y la
@@ -277,6 +294,7 @@ el razonamiento que un diff no muestra.
 - [F0: el esqueleto](docs/recorrido/f0-esqueleto.md)
 - [F1: el cerebro del coach](docs/recorrido/f1-cerebro-del-coach.md)
 - [F2: la voz](docs/recorrido/f2-voz.md)
+- [F3: la memoria](docs/recorrido/f3-memoria.md)
 
 ---
 
