@@ -50,20 +50,34 @@ suite en verde y se comitea sólo después de haberse ejecutado.
 |---|---|---|
 | F0 | Esqueleto: aplicación, configuración, salud | Hecho |
 | F1 | Cerebro del coach: persona, reglas, chat de texto | Hecho |
-| F2 | Voz conversacional con la Live API | Siguiente |
-| F3 | Memoria entre sesiones | Planeado |
+| F2 | Voz conversacional con la Live API | Hecho |
+| F3 | Memoria entre sesiones | Siguiente |
 | F4 | Perfil del corredor extraído de la conversación | Planeado |
 | F5 | Interfaz web | Planeado |
 | F6 | Recordatorios proactivos por Telegram | Planeado |
 | F7 | Despliegue | Planeado |
 | F8 | Entrega | Planeado |
 
-Hoy corre: el coach responde preguntas de entrenamiento por texto contra el
-modelo real, con la persona y las reglas de seguridad aplicándose. Todavía no
-recuerda nada entre mensajes; esa es F3. Este README se actualiza conforme cada
-fragmento existe, no antes.
+Hoy corre: se le puede **hablar** y contesta con voz, en cualquier navegador con
+micrófono. También responde por escrito. La persona y las reglas de seguridad se
+aplican en ambos caminos. Todavía no recuerda nada entre mensajes; esa es F3.
+Este README se actualiza conforme cada fragmento existe, no antes.
 
-Una conversación real contra la API, para que se vea el comportamiento:
+Una conversación hablada real, verificada de punta a punta contra la API:
+
+> **[hablado]** Hola entrenador, corro veinte kilómetros por semana y quiero un
+> medio maratón.
+>
+> **[hablado]** Veinte kilómetros ya son una buena base. Para armar el plan,
+> dime cuánto tiempo llevas corriendo de forma constante y para cuándo tienes
+> pensada la carrera. Así sumamos los kilómetros sin pasarnos de ese diez por
+> ciento.
+
+La regla del diez por ciento aparece sin que nadie la mencione: la persona llega
+igual a la sesión de voz que al chat de texto, porque ambos la toman del mismo
+módulo.
+
+Y por escrito:
 
 > **Corro 20 km por semana y quiero un 21K en diciembre. ¿Por dónde empiezo?**
 >
@@ -84,24 +98,37 @@ Preguntó en lugar de suponer. Y bajo presión sostiene las reglas:
 
 ---
 
-## Arquitectura prevista
+## Arquitectura
+
+Lo que ya existe está en trazo continuo; lo planeado, con guiones.
 
 ```
-Navegador                          Telegram
-  voz  <--WebSocket-->               texto
-  texto <--HTTP------>                 |
-        |                              |
-        +---------- FastAPI -----------+
-                       |
-                  CoachAgent
-          (devuelve la respuesta;
-           quien llama la entrega)
-                       |
-        +--------------+--------------+
-        |              |              |
-   Persistencia    Gemini        Reglas de
-    (SQLite)    Live + texto    entrenamiento
+Navegador                             Telegram (F6)
+  voz   <==WebSocket==>                 texto
+  texto <==HTTP=======>                   :
+        |                                 :
+        +============ FastAPI ............+
+                         |
+              +==========+==========+
+              |                     |
+         CoachAgent            /ws/voice
+    (devuelve la respuesta;   (proxy hacia
+     quien llama la entrega)   Gemini Live)
+              |                     |
+              +==========+==========+
+                         |
+        +================+========. . . . . .+
+        |                |                   |
+    Reglas de      Gemini texto        Persistencia
+  entrenamiento    + Gemini Live        (SQLite, F3)
 ```
+
+El navegador nunca ve la clave de API: cada trama de audio pasa por el servidor.
+
+El audio tiene dos frecuencias distintas, y no es una errata. La API acepta PCM
+de 16 bits a 16 kHz y devuelve a 24 kHz. Ambas viajan en el saludo inicial del
+WebSocket para que el cliente no las tenga escritas a mano y se desincronicen en
+silencio.
 
 `CoachAgent` no envía nada: devuelve la respuesta y quien la pidió decide si eso
 se convierte en audio, en una respuesta HTTP o en un mensaje de Telegram. Esa
@@ -121,7 +148,7 @@ Cada elección está medida contra la API real, no supuesta.
 | Capa | Elección | Razón |
 |---|---|---|
 | API | FastAPI | Async nativo, tipado, documentación generada |
-| Voz | Gemini Live (modelo pendiente) | Audio bidireccional nativo; el navegador sólo necesita micrófono y WebSocket, así que funciona en cualquiera |
+| Voz | Gemini Live (`gemini-3.1-flash-live-preview`) | Audio bidireccional nativo; el navegador sólo necesita micrófono y WebSocket, así que funciona en cualquiera |
 | Texto | `gemini-3.5-flash-lite` | 1.26 s medidos, sin razonamiento interno; 500 requests/día vs. 20 de los modelos no-lite |
 | Persistencia | SQLite con SQLAlchemy 2.0 | Cero configuración; el ORM deja abierta la ruta a PostgreSQL |
 | Recordatorios | Telegram con APScheduler | Lo único que una pestaña cerrada no puede hacer |
@@ -132,10 +159,21 @@ presupuesto de salida. Con un presupuesto de 400 tokens, uno gastó 382 pensando
 y emitió catorce caracteres. Para una conversación hablada, donde la latencia es
 la experiencia, el modelo ligero gana.
 
-**Sobre la voz:** Dos modelos Live cumplen. `gemini-3.1-flash-live-preview` tiene
-65K tokens/minuto; `gemini-2.5-flash-native-audio-latest` tiene 1M. El modelo
-elegido se decide en F2 midiendo consumo real de una conversación hablada, no a
-ojo. El tope de minutos de voz por sesión se dimensiona con la misma medición.
+**Sobre la voz:** Se midieron los dos modelos Live disponibles antes de elegir.
+
+| modelo | primer audio | tokens/turno | límite |
+|---|---|---|---|
+| `gemini-3.1-flash-live-preview` | **0.83 s** | **291** | 65K tokens/min |
+| `gemini-2.5-flash-native-audio-latest` | 3.01 s | 480 | 1M tokens/min |
+
+El elegido gana en las dos dimensiones que importan pese a tener el techo de
+tokens más bajo. Ese techo resultó holgado: a unos 470 tokens por turno real,
+son del orden de veinte conversaciones simultáneas.
+
+**Sobre la captura de audio:** `MediaRecorder`, que es la forma evidente de
+grabar en el navegador, produce contenedores webm/opus y la API quiere PCM
+crudo. Por eso la captura usa un AudioWorklet, que entrega las muestras sin
+codificar, y el remuestreo a 16 kHz se hace a mano.
 
 **Restricción de cuota:** El tier gratuito da 500 requests/día para los modelos
 de texto. Gastar dos llamadas por turno (respuesta más extracción de perfil)
@@ -178,18 +216,22 @@ Arranque:
 uvicorn src.main:app --reload --port 8000
 ```
 
-La documentación interactiva queda en `http://localhost:8000/docs`.
+Abre `http://localhost:8000` y pulsa **Hablar**. El navegador pedirá permiso del
+micrófono. La documentación interactiva de la API queda en `/docs`.
 
-Para hablar con el coach sin cliente web todavía:
+El micrófono requiere un contexto seguro: los navegadores lo permiten en
+`localhost`, pero al desplegar hace falta HTTPS. Eso se resuelve en F7.
+
+Sin cliente web, por escrito:
 
 ```bash
 curl -s -X POST http://localhost:8000/api/chat -H "Content-Type: application/json" -d "{\"message\":\"Corro 20 km por semana, quiero un 21K\"}"
 ```
 
 Sin `GOOGLE_API_KEY` la aplicación arranca igual: `/health` reporta
-`not_configured` y el coach responde con un mensaje de respaldo en lugar de
-fallar. Eso mantiene la suite y el chequeo de salud utilizables en integración
-continua.
+`not_configured`, la voz responde con una caída a texto y el chat contesta con un
+mensaje de respaldo en lugar de fallar. Eso mantiene la suite y el chequeo de
+salud utilizables en integración continua.
 
 ---
 
@@ -206,9 +248,14 @@ pytest --cov=src --cov-report=term-missing
 Las pruebas no tocan la red. El modelo y el bot se sustituyen por dobles, así
 que la suite es determinista y corre sin credenciales.
 
-64 pruebas, 87 por ciento de cobertura. Las reglas de entrenamiento y el agente
-están al 100; lo que falta es el camino de red del cliente, alcanzable solo
+98 pruebas, 87 por ciento de cobertura. Las reglas de entrenamiento y el agente
+están al 100; lo que falta es el camino de red de los clientes, alcanzable solo
 gastando cuota.
+
+La voz se prueba contra una sesión Live falsa que reproduce un guion de mensajes
+del servidor. Eso cubre el protocolo del WebSocket, el presupuesto de voz y la
+caída a texto sin abrir un socket real. Que el audio suene de verdad es una
+pregunta de navegador, y se verificó a mano.
 
 `GET /health` ejecuta una consulta real contra la base en lugar de devolver una
 respuesta fija, y hay una prueba que fuerza específicamente la rama degradada:
@@ -229,6 +276,7 @@ el razonamiento que un diff no muestra.
 
 - [F0: el esqueleto](docs/recorrido/f0-esqueleto.md)
 - [F1: el cerebro del coach](docs/recorrido/f1-cerebro-del-coach.md)
+- [F2: la voz](docs/recorrido/f2-voz.md)
 
 ---
 
