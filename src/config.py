@@ -16,6 +16,26 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./runcoach.db"
 
+    google_api_key: str = ""
+    # Model ids live in configuration, not in code: gemini-2.5-flash was retired
+    # mid-project, and a retirement should be an env change rather than a deploy.
+    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_live_model: str = "gemini-3.1-flash-live-preview"
+
+    # Reasoning models charge their thinking against this budget, so it has to
+    # leave room for both. The lite models do not think, but the headroom costs
+    # nothing and protects the config against a model swap.
+    gemini_max_output_tokens: int = 1200
+    gemini_temperature: float = 0.7
+
+    # How many past turns are replayed to the model. Bounded because the free
+    # tier caps tokens per minute, and because old turns stop being useful.
+    history_limit: int = 20
+
+    @property
+    def gemini_enabled(self) -> bool:
+        return bool(self.google_api_key.strip())
+
 
 @lru_cache
 def get_settings() -> Settings:
