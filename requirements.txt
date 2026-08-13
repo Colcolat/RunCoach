@@ -11,6 +11,9 @@ pydantic-settings>=2.15,<3
 # Persistence
 SQLAlchemy>=2.0.52,<2.1
 
+# Model provider. google-generativeai is retired; google-genai replaces it.
+google-genai>=2.18,<3
+
 # Configuration
 python-dotenv>=1.2,<2
 
