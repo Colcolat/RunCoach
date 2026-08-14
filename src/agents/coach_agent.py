@@ -26,13 +26,26 @@ from src.coaching.extraction import (
 from src.coaching.prompts import build_system_prompt, welcome_message
 from src.config import get_settings
 from src.services import db_service
-from src.services.gemini_service import GeminiService, GeminiUnavailableError
+from src.services.gemini_service import (
+    GeminiRateLimitedError,
+    GeminiService,
+    GeminiUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
 
 DEGRADED_MESSAGE = (
     "Ahora mismo no puedo consultar con el entrenador. Vuelve a intentarlo en un "
     "momento y seguimos con tu plan."
+)
+
+# A rate limit clears on its own in under a minute, so it deserves its own
+# message. The generic one tells a runner the coach is unreachable when the
+# truth is that they were faster than the free tier allows, and it does not say
+# the thing they most need to hear: the conversation is intact.
+RATE_LIMITED_MESSAGE = (
+    "Vamos más rápido de lo que el servicio permite ahora mismo. Espera unos "
+    "segundos y vuelve a preguntar: no he perdido el hilo de la conversación."
 )
 
 
@@ -69,6 +82,9 @@ class CoachAgent:
                 ),
                 history=history,
             )
+        except GeminiRateLimitedError:
+            logger.warning("Coach rate limited; asking the runner to wait")
+            return CoachReply(text=RATE_LIMITED_MESSAGE, degraded=True)
         except GeminiUnavailableError:
             # Degrade rather than propagate: a runner mid-conversation should
             # get an answer, and /health already reports the real cause.

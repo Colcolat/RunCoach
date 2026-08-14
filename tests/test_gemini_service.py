@@ -10,7 +10,14 @@ from __future__ import annotations
 import pytest
 
 from src.config import Settings
-from src.services.gemini_service import GeminiService, GeminiUnavailableError
+from google.genai import errors
+
+from src.services.gemini_service import (
+    GeminiRateLimitedError,
+    GeminiService,
+    GeminiUnavailableError,
+    _is_rate_limit,
+)
 
 
 def _service(**overrides) -> GeminiService:
@@ -158,3 +165,77 @@ async def test_extraction_asks_for_json_at_zero_temperature():
     assert config.temperature == 0.0
     assert config.response_mime_type == "application/json"
     assert config.response_schema == schema
+
+
+# --- rate limits -------------------------------------------------------------
+
+def test_extraction_runs_on_a_different_model_than_the_replies():
+    """The whole point: rate limits are per model, so these draw on separate buckets.
+
+    Measured on the free tier while testing F4: the coaching model peaked at 22
+    requests a minute against a ceiling of 15, and the runner got a failure mid
+    conversation, while the other lite model sat at 1.
+    """
+    service = GeminiService(settings=Settings(google_api_key="k"))
+
+    assert service.extraction_model != service.model
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        errors.ClientError(429, {"error": {"message": "quota"}}),
+        RuntimeError("429 RESOURCE_EXHAUSTED"),
+        RuntimeError("You exceeded your current rate limit"),
+    ],
+)
+def test_a_quota_refusal_is_recognised(exc):
+    assert _is_rate_limit(exc) is True
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [RuntimeError("connection reset"), ValueError("bad schema"), errors.ClientError(400, {})],
+)
+def test_an_ordinary_failure_is_not_mistaken_for_a_quota_refusal(exc):
+    """A false positive would tell a runner to wait for a limit that is not the problem."""
+    assert _is_rate_limit(exc) is False
+
+
+class _RefusingModels:
+    def __init__(self, exc):
+        self._exc = exc
+
+    async def generate_content(self, model, contents, config):
+        raise self._exc
+
+
+def _refusing_service(exc) -> GeminiService:
+    service = GeminiService(settings=Settings(google_api_key="k"))
+    service._client = type("c", (), {"aio": type("aio", (), {"models": _RefusingModels(exc)})()})()
+    return service
+
+
+@pytest.mark.asyncio
+async def test_generate_raises_the_rate_limited_type():
+    service = _refusing_service(errors.ClientError(429, {"error": {"message": "quota"}}))
+
+    with pytest.raises(GeminiRateLimitedError):
+        await service.generate("hola", "eres un coach")
+
+
+@pytest.mark.asyncio
+async def test_extract_raises_the_rate_limited_type():
+    service = _refusing_service(errors.ClientError(429, {"error": {"message": "quota"}}))
+
+    with pytest.raises(GeminiRateLimitedError):
+        await service.extract("corro 15", "lee", {})
+
+
+@pytest.mark.asyncio
+async def test_a_rate_limit_still_degrades_for_callers_that_do_not_care():
+    """A subclass, so every existing caller keeps working unchanged."""
+    service = _refusing_service(errors.ClientError(429, {"error": {"message": "quota"}}))
+
+    with pytest.raises(GeminiUnavailableError):
+        await service.generate("hola", "eres un coach")
