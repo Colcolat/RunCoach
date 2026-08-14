@@ -11,19 +11,41 @@ history, and persists both sides of the exchange.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
+from src.coaching.extraction import (
+    EXTRACTION_SCHEMA,
+    HISTORY_TURNS,
+    build_extraction_prompt,
+    clean,
+    mentions_profile_information,
+)
 from src.coaching.prompts import build_system_prompt, welcome_message
 from src.config import get_settings
 from src.services import db_service
-from src.services.gemini_service import GeminiService, GeminiUnavailableError
+from src.services.gemini_service import (
+    GeminiRateLimitedError,
+    GeminiService,
+    GeminiUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
 
 DEGRADED_MESSAGE = (
     "Ahora mismo no puedo consultar con el entrenador. Vuelve a intentarlo en un "
     "momento y seguimos con tu plan."
+)
+
+# A rate limit clears on its own in under a minute, so it deserves its own
+# message. The generic one tells a runner the coach is unreachable when the
+# truth is that they were faster than the free tier allows, and it does not say
+# the thing they most need to hear: the conversation is intact.
+RATE_LIMITED_MESSAGE = (
+    "Vamos más rápido de lo que el servicio permite ahora mismo. Espera unos "
+    "segundos y vuelve a preguntar: no he perdido el hilo de la conversación."
 )
 
 
@@ -55,9 +77,14 @@ class CoachAgent:
         try:
             reply = await self._gemini.generate(
                 message=text,
-                system_prompt=build_system_prompt(profile),
+                system_prompt=build_system_prompt(
+                    profile, today=datetime.now(timezone.utc).date()
+                ),
                 history=history,
             )
+        except GeminiRateLimitedError:
+            logger.warning("Coach rate limited; asking the runner to wait")
+            return CoachReply(text=RATE_LIMITED_MESSAGE, degraded=True)
         except GeminiUnavailableError:
             # Degrade rather than propagate: a runner mid-conversation should
             # get an answer, and /health already reports the real cause.
@@ -90,7 +117,21 @@ class CoachAgent:
         conversation_id = self._db.get_or_create_conversation(user["id"])
         history = self._db.get_history(conversation_id, limit=get_settings().history_limit)
 
-        reply = await self.handle_message(text, profile=user, history=history)
+        # Both calls start together, so a turn that also gets read for profile
+        # data costs the same wall clock as one that does not. Run in sequence
+        # they would roughly double the wait, and this is a voice-first product
+        # where latency is the experience.
+        reply, updates = await asyncio.gather(
+            self.handle_message(text, profile=user, history=history),
+            self._read_profile(text, history),
+        )
+
+        if updates:
+            # This turn's reply was composed against the profile as it was
+            # before, which costs nothing: the model already saw the runner say
+            # it, in this very message. What the write buys is the next session,
+            # when the conversation is gone and the profile is all that is left.
+            self._db.update_profile(user["id"], **updates)
 
         # Persist after answering, and persist both sides. Saving the question
         # first would leave an unanswered turn in history if the model failed,
@@ -101,6 +142,40 @@ class CoachAgent:
         return CoachReply(
             text=reply.text, degraded=reply.degraded, conversation_id=conversation_id
         )
+
+    async def _read_profile(
+        self, message: str, history: list[dict[str, str]] | None
+    ) -> dict:
+        """Read profile fields out of a turn. Returns {} when there is nothing.
+
+        Never raises. A failed extraction must not cost the runner their reply,
+        and the reply is the thing they asked for; the profile is a side effect
+        that improves the next conversation.
+        """
+        if not get_settings().profile_extraction_enabled:
+            return {}
+        if not mentions_profile_information(message):
+            # The turn carries no numbers, distances, levels or months. Most
+            # turns in a real conversation look like this, and each one skipped
+            # is a request left for someone else's demo.
+            return {}
+
+        today = datetime.now(timezone.utc).date()
+        try:
+            raw = await self._gemini.extract(
+                message=message,
+                system_prompt=build_extraction_prompt(today),
+                schema=EXTRACTION_SCHEMA,
+                history=(history or [])[-HISTORY_TURNS:],
+            )
+        except GeminiUnavailableError:
+            logger.warning("Profile extraction unavailable; continuing without it")
+            return {}
+        except Exception:  # noqa: BLE001 - a side effect must never take the reply down
+            logger.exception("Profile extraction failed")
+            return {}
+
+        return clean(raw, today)
 
     def remember_voice_turn(
         self, web_session_id: str, role: str, content: str

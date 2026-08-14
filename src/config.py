@@ -28,6 +28,21 @@ class Settings(BaseSettings):
     gemini_max_output_tokens: int = 1200
     gemini_temperature: float = 0.7
 
+    # Profile extraction is a second request per qualifying turn. Measured at
+    # about 300 tokens, so 400 leaves room without inviting a runaway. Turning
+    # it off costs personalisation and buys back half the daily request budget,
+    # which is the trade worth having available on the free tier.
+    profile_extraction_enabled: bool = True
+    gemini_extraction_max_output_tokens: int = 400
+
+    # Deliberately a different model from the coaching one. Rate limits are per
+    # model, so extraction on its own id draws from its own 15/minute bucket
+    # instead of competing with the replies the runner is waiting for. Measured
+    # on the free tier: the coaching model peaked at 22 requests a minute
+    # against a ceiling of 15 while this one sat at 1. Same family, same price,
+    # and reading four fields out of a sentence does not need the better model.
+    gemini_extraction_model: str = "gemini-3.1-flash-lite"
+
     # How many past turns are replayed to the model. Bounded because the free
     # tier caps tokens per minute, and because old turns stop being useful.
     history_limit: int = 20

@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.coach_agent import DEGRADED_MESSAGE, CoachAgent, CoachReply
+from src.agents.coach_agent import (
+    DEGRADED_MESSAGE,
+    RATE_LIMITED_MESSAGE,
+    CoachAgent,
+    CoachReply,
+)
+from src.services.gemini_service import GeminiRateLimitedError
 from src.coaching.prompts import GOAL_GUIDANCE
 from src.services.gemini_service import GeminiUnavailableError
 
@@ -85,3 +91,33 @@ def test_welcome_costs_no_request(coach, gemini):
     assert "Juan" in reply.text
     assert gemini.calls == []
     assert reply.degraded is False
+
+
+@pytest.mark.asyncio
+async def test_a_rate_limit_says_so_instead_of_sounding_broken(coach, gemini):
+    """A limit that clears in under a minute is not the coach being unreachable.
+
+    Hit in real use while testing F4: the free tier allows 15 requests a minute
+    and a conversation went over, and the runner was told the coach could not be
+    consulted, which reads like the app is down.
+    """
+    gemini.fail_with = GeminiRateLimitedError("429")
+
+    reply = await coach.handle_message("corro 20 km")
+
+    assert reply.degraded is True
+    assert reply.text == RATE_LIMITED_MESSAGE
+    assert "segundos" in reply.text
+    assert "no he perdido el hilo" in reply.text
+
+
+@pytest.mark.asyncio
+async def test_a_rate_limited_extraction_does_not_cost_the_reply(client, gemini):
+    """The two run on separate models, but if the extractor is refused anyway."""
+    gemini.extract_fail_with = GeminiRateLimitedError("429")
+
+    response = client.post("/api/chat", json={"message": "corro 15 km", "session_id": "s1"})
+
+    assert response.status_code == 200
+    assert response.json()["reply"] == gemini.reply
+    assert response.json()["degraded"] is False

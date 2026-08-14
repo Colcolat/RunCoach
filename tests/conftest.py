@@ -24,6 +24,13 @@ class StubGemini:
         self.calls: list[dict] = []
         self.fail_with: Exception | None = None
 
+        # The extraction path (F4). `extraction` is what the model "reads" from
+        # a turn; `extractions` records the calls, so a test can assert that a
+        # turn was never sent at all.
+        self.extraction: dict = {}
+        self.extractions: list[dict] = []
+        self.extract_fail_with: Exception | None = None
+
     async def generate(self, message, system_prompt, history=None):
         self.calls.append(
             {"message": message, "system_prompt": system_prompt, "history": history}
@@ -31,6 +38,19 @@ class StubGemini:
         if self.fail_with is not None:
             raise self.fail_with
         return self.reply
+
+    async def extract(self, message, system_prompt, schema, history=None):
+        self.extractions.append(
+            {
+                "message": message,
+                "system_prompt": system_prompt,
+                "schema": schema,
+                "history": history,
+            }
+        )
+        if self.extract_fail_with is not None:
+            raise self.extract_fail_with
+        return dict(self.extraction)
 
 
 @pytest.fixture(autouse=True)
