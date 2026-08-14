@@ -217,20 +217,27 @@ Requiere Python 3.10 o superior. Verificado en 3.14.2.
 
 ```bash
 git clone https://github.com/Colcolat/RunCoach.git
-cd RunCoach
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
 ```
-
-En Linux o macOS la activación es `source venv/bin/activate`.
-
-Todas las dependencias tienen rueda precompilada, de modo que no hace falta
-compilador:
 
 ```bash
-pip install -r requirements.txt --only-binary=:all:
+cd RunCoach && py -m venv venv
 ```
+
+En Windows conviene `py` sobre `python`: el `python` pelado puede resolver a un
+stub de la Microsoft Store que no crea entornos. En Linux o macOS es `python3`.
+
+```bash
+venv/Scripts/python.exe -m pip install -r requirements.txt --only-binary=:all:
+```
+
+`--only-binary=:all:` no es un extra: obliga a que todo se instale desde rueda
+precompilada, así que si la instalación termina, está probado que la máquina no
+necesita compilador. Todos los pines lo cumplen.
+
+Llamar al intérprete del entorno por su ruta evita tener que activarlo, que es
+el paso que se olvida y produce instalaciones en el Python del sistema. Si
+prefieres activarlo, es `venv\Scripts\activate` en Windows y
+`source venv/bin/activate` en Linux o macOS.
 
 Configuración:
 
@@ -238,10 +245,13 @@ Configuración:
 cp .env.example .env
 ```
 
-Arranque:
+Pega tu clave en `GOOGLE_API_KEY`. Todo lo demás tiene un valor por defecto que
+funciona, así que un `.env` con solo esa línea es válido.
+
+Arranque, desde la raíz del proyecto:
 
 ```bash
-uvicorn src.main:app --reload --port 8000
+venv/Scripts/python.exe -m uvicorn src.main:app --reload --port 8000
 ```
 
 Abre `http://localhost:8000` y pulsa **Hablar**. El navegador pedirá permiso del
@@ -260,6 +270,9 @@ Sin `GOOGLE_API_KEY` la aplicación arranca igual: `/health` reporta
 `not_configured`, la voz responde con una caída a texto y el chat contesta con un
 mensaje de respaldo en lugar de fallar. Eso mantiene la suite y el chequeo de
 salud utilizables en integración continua.
+
+Para montarlo en otra máquina hay una guía paso a paso, con lo que falla y por
+qué: [trabajar desde otra PC](docs/trabajar-desde-otra-pc.md).
 
 ---
 

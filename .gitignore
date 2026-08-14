@@ -24,6 +24,7 @@ htmlcov/
 
 # Tooling output
 graphify-out/
+*.log
 
 # IDE
 .vscode/
