@@ -11,6 +11,8 @@ badly when spoken aloud.
 
 from __future__ import annotations
 
+from datetime import date
+
 BASE_PERSONA = """Eres RunCoach, un entrenador de running con veinte años preparando corredores \
 de todos los niveles, desde quien sale a trotar por primera vez hasta quien busca bajar su marca \
 en maratón.
@@ -63,6 +65,12 @@ que aguanta cinco de un tirón.
 Antes de dar cifras haz la cuenta y dila en voz alta: "ahora corres tres, así que esta semana \
 vamos a cuatro". Si el número te parece pequeño, es pequeño a propósito. La paciencia es parte del \
 entrenamiento y subir despacio es lo que evita la lesión que lo tira todo por tierra.
+
+Un plan que tú propusiste no es kilometraje que el corredor haya corrido. Mientras no te diga que \
+lo completó, su volumen actual sigue siendo el último número que él te dio, no el que tú le \
+propusiste hace dos frases. Nunca calcules el diez por ciento sobre tu propia propuesta: si lo \
+haces en cada turno, el plan sube solo y acabas doblando el volumen de alguien que no ha corrido \
+ni un kilómetro de más.
 
 Cuando desgloses las sesiones, súmalas antes de decirlas y comprueba que dan exactamente el total \
 que anunciaste. Si no cuadran, ajusta el desglose hacia abajo, nunca el total hacia arriba. Un plan \
@@ -132,7 +140,38 @@ ganas de entrenar.""",
 }
 
 
-def _describe_profile(profile: dict) -> str:
+def _describe_race_date(race_date: str, today: date | None) -> str:
+    """Render the race date with the time left, not just the date.
+
+    A bare "2026-10-01" is close to useless to the model: it has no reliable
+    sense of today, so it cannot tell a race six weeks out from one twenty weeks
+    out, and that difference is the whole shape of the plan. The guidance text
+    itself reasons in weeks ("un bloque de doce a dieciséis semanas"), so the
+    arithmetic is done here rather than hoped for.
+    """
+    line = f"Fecha de la carrera: {race_date}"
+    if today is None:
+        return line
+
+    try:
+        parsed = date.fromisoformat(race_date)
+    except ValueError:
+        # Whatever is in the column, a malformed date must not break the prompt.
+        return line
+
+    days = (parsed - today).days
+    if days < 0:
+        return f"{line} (ya pasó; pregunta si hay una nueva carrera en mente)"
+
+    weeks = days // 7
+    if weeks == 0:
+        return f"{line} (es esta misma semana)"
+    if weeks == 1:
+        return f"{line} (falta 1 semana)"
+    return f"{line} (faltan {weeks} semanas)"
+
+
+def _describe_profile(profile: dict, today: date | None = None) -> str:
     """Render what was on record before this conversation started.
 
     Missing fields are named but never carry an instruction to ask. The system
@@ -157,23 +196,25 @@ def _describe_profile(profile: dict) -> str:
         f"Volumen actual: {mileage} km por semana" if mileage else "Volumen actual: sin registrar",
     ]
     if race_date:
-        lines.append(f"Fecha de la carrera: {race_date}")
+        lines.append(_describe_race_date(race_date, today))
 
     return "\n".join(lines)
 
 
-def build_system_prompt(profile: dict | None = None) -> str:
+def build_system_prompt(profile: dict | None = None, today: date | None = None) -> str:
     """Compose the persona with whatever is known about this runner.
 
     Accepts the profile as a plain dict so this module stays independent of the
-    ORM that arrives in F3.
+    ORM that arrives in F3. `today` is passed in rather than read from the clock
+    so this module stays free of I/O and the weeks-to-race arithmetic can be
+    tested against a fixed date.
     """
     profile = profile or {}
     sections = [
         BASE_PERSONA,
         "PERFIL REGISTRADO ANTES DE ESTA CONVERSACIÓN\n"
         "(si la conversación dice otra cosa, la conversación manda)\n"
-        + _describe_profile(profile),
+        + _describe_profile(profile, today),
     ]
 
     goal = profile.get("goal")

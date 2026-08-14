@@ -6,6 +6,8 @@ a test fails rather than the change passing unnoticed into a prompt.
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from src.coaching.prompts import (
@@ -194,3 +196,54 @@ def test_welcome_asks_for_the_two_facts_the_coach_needs():
 
 def test_welcome_uses_the_name_when_known():
     assert "Juan" in welcome_message("Juan")
+
+
+# --- the race date, and how far away it is -----------------------------------
+
+def test_a_race_date_is_rendered_with_the_weeks_left():
+    """A bare ISO date tells the model nothing: it has no reliable sense of today."""
+    prompt = build_system_prompt(
+        {"goal": "10K", "race_date": "2026-10-01"}, today=date(2026, 8, 14)
+    )
+
+    assert "faltan 6 semanas" in prompt
+
+
+def test_a_race_this_week_says_so():
+    prompt = build_system_prompt({"race_date": "2026-08-16"}, today=date(2026, 8, 14))
+
+    assert "esta misma semana" in prompt
+
+
+def test_a_single_week_is_not_pluralised():
+    prompt = build_system_prompt({"race_date": "2026-08-22"}, today=date(2026, 8, 14))
+
+    assert "falta 1 semana" in prompt
+
+
+def test_a_race_already_run_prompts_for_the_next_one():
+    prompt = build_system_prompt({"race_date": "2026-07-01"}, today=date(2026, 8, 14))
+
+    assert "ya pasó" in prompt
+
+
+def test_without_a_date_of_reference_the_race_date_still_renders():
+    """Callers that have no clock, such as tests and the voice path, still work."""
+    prompt = build_system_prompt({"race_date": "2026-10-01"})
+
+    assert "Fecha de la carrera: 2026-10-01" in prompt
+    assert "semanas" not in prompt.split("PERFIL REGISTRADO")[1]
+
+
+def test_a_malformed_stored_date_does_not_break_the_prompt():
+    prompt = build_system_prompt({"race_date": "en octubre"}, today=date(2026, 8, 14))
+
+    assert "Fecha de la carrera: en octubre" in prompt
+
+
+def test_the_coach_is_told_its_own_plan_is_not_kilometres_run():
+    """Otherwise it computes the next ten percent on its own last proposal."""
+    prompt = build_system_prompt()
+
+    assert "no es kilometraje que el corredor haya corrido" in prompt
+    assert "Nunca calcules el diez por ciento sobre tu propia propuesta" in prompt

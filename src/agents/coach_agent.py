@@ -64,7 +64,9 @@ class CoachAgent:
         try:
             reply = await self._gemini.generate(
                 message=text,
-                system_prompt=build_system_prompt(profile),
+                system_prompt=build_system_prompt(
+                    profile, today=datetime.now(timezone.utc).date()
+                ),
                 history=history,
             )
         except GeminiUnavailableError:
