@@ -12,6 +12,7 @@ es el razonamiento detrás del código, que es justo lo que un diff no muestra.
 | F1 | [Cerebro del coach](f1-cerebro-del-coach.md) | Persona, reglas, cliente de Gemini, agente, rutas |
 | F2 | [La voz](f2-voz.md) | Live API, proxy WebSocket, captura de audio, presupuesto |
 | F3 | [La memoria](f3-memoria.md) | Modelos, persistencia, historial unificado, reglas verificadas |
+| F4 | [El perfil](f4-perfil.md) | Extracción estructurada, compuerta de cuota, validación, límites por modelo |
 
 ## Cómo leerlas
 

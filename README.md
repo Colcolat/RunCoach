@@ -52,18 +52,20 @@ suite en verde y se comitea sólo después de haberse ejecutado.
 | F1 | Cerebro del coach: persona, reglas, chat de texto | Hecho |
 | F2 | Voz conversacional con la Live API | Hecho |
 | F3 | Memoria entre sesiones | Hecho |
-| F4 | Perfil del corredor extraído de la conversación | Siguiente |
-| F5 | Interfaz web | Planeado |
+| F4 | Perfil del corredor extraído de la conversación | Hecho |
+| F5 | Interfaz web | Siguiente |
 | F6 | Recordatorios proactivos por Telegram | Planeado |
 | F7 | Despliegue | Planeado |
 | F8 | Entrega | Planeado |
 
 Hoy corre: se le puede **hablar** y contesta con voz, en cualquier navegador con
-micrófono. También responde por escrito. **Y recuerda**: la conversación persiste
+micrófono. También responde por escrito. **Recuerda**: la conversación persiste
 entre recargas, y hablar y escribir alimentan un mismo historial, así que se
-puede empezar por voz y seguir por texto sin perder el hilo. Todavía no extrae un
-perfil estructurado de lo que se le cuenta; esa es F4. Este README se actualiza
-conforme cada fragmento existe, no antes.
+puede empezar por voz y seguir por texto sin perder el hilo. **Y toma nota**: el
+objetivo, el nivel, el volumen semanal y la fecha de carrera se leen de lo que el
+corredor cuenta y quedan registrados, así que la personalización sobrevive a la
+conversación que la produjo. Lo que falta es la interfaz de verdad, que es F5.
+Este README se actualiza conforme cada fragmento existe, no antes.
 
 Una conversación hablada real, verificada de punta a punta contra la API:
 
@@ -137,6 +139,12 @@ se convierte en audio, en una respuesta HTTP o en un mensaje de Telegram. Esa
 separación es lo que permite que una sola implementación del coach sirva a la web
 y al bot sin duplicar el pipeline.
 
+Un turno puede costar dos llamadas al modelo: la respuesta, y la lectura del
+perfil que el corredor acaba de revelar. Van en paralelo y a modelos distintos,
+por latencia y por límites de frecuencia respectivamente. La lectura del perfil
+nunca puede tumbar la respuesta: es un efecto secundario que mejora la próxima
+conversación, mientras que la respuesta es lo que la persona pidió.
+
 Las sesiones de base de datos no salen de la capa de persistencia; quien llama
 recibe diccionarios e identificadores. Eso elimina por construcción una familia
 entera de errores de objetos desconectados.
@@ -152,6 +160,7 @@ Cada elección está medida contra la API real, no supuesta.
 | API | FastAPI | Async nativo, tipado, documentación generada |
 | Voz | Gemini Live (`gemini-3.1-flash-live-preview`) | Audio bidireccional nativo; el navegador sólo necesita micrófono y WebSocket, así que funciona en cualquiera |
 | Texto | `gemini-3.5-flash-lite` | 1.26 s medidos, sin razonamiento interno; 500 requests/día vs. 20 de los modelos no-lite |
+| Extracción de perfil | `gemini-3.1-flash-lite` | Deliberadamente otro id: los límites de frecuencia son por modelo, así que leer el perfil no compite con responder |
 | Persistencia | SQLite con SQLAlchemy 2.0 | Cero configuración; el ORM deja abierta la ruta a PostgreSQL |
 | Recordatorios | Telegram con APScheduler | Lo único que una pestaña cerrada no puede hacer |
 
@@ -177,11 +186,28 @@ grabar en el navegador, produce contenedores webm/opus y la API quiere PCM
 crudo. Por eso la captura usa un AudioWorklet, que entrega las muestras sin
 codificar, y el remuestreo a 16 kHz se hace a mano.
 
-**Restricción de cuota:** El tier gratuito da 500 requests/día para los modelos
-de texto. Gastar dos llamadas por turno (respuesta más extracción de perfil)
-reduciría la capacidad a 250 turnos diarios. La extracción de perfil (F4) se
-dispara solo cuando el turno plausiblemente trae información nueva, no en cada
-mensaje.
+**Restricción de cuota:** El tier gratuito da 500 requests/día y **15 por
+minuto** para cada modelo de texto. La extracción de perfil añade una segunda
+llamada, y las dos restricciones piden respuestas distintas.
+
+Contra el límite diario, una compuerta de Python puro decide antes de gastar
+nada: un turno sin números, sin distancias, sin niveles y sin meses no lleva
+perfil que extraer, y en una conversación real la mayoría son así. Los números
+escritos con letra cuentan igual que los dígitos, porque los turnos de voz
+llegan transcritos y la Live API escribe "quince kilómetros".
+
+Contra el límite por minuto, la extracción corre en **otro id de modelo**. Los
+límites son por modelo, así que las dos llamadas dejan de competir. La medición
+que lo motivó, tomada de la consola durante una conversación real:
+
+| modelo | por minuto | por día |
+|---|---|---|
+| `gemini-3.5-flash-lite` (respuestas) | **22 / 15** | 110 / 500 |
+| `gemini-3.1-flash-lite` (extracción) | 1 / 15 | 1 / 500 |
+
+Las dos llamadas se lanzan a la vez, así que un turno que además se lee cuesta
+el mismo tiempo de reloj que uno que no: 2.5 s medidos con extracción, 1.2 s
+cuando la compuerta la salta.
 
 ---
 
@@ -250,9 +276,9 @@ pytest --cov=src --cov-report=term-missing
 Las pruebas no tocan la red. El modelo y el bot se sustituyen por dobles, así
 que la suite es determinista y corre sin credenciales.
 
-125 pruebas sin red, 91 por ciento de cobertura. Las reglas de entrenamiento, el
-agente y la persistencia están al 100; lo que falta es el camino de red de los
-clientes.
+199 pruebas sin red, 93 por ciento de cobertura. Las reglas de entrenamiento, la
+extracción de perfil y la persistencia están al 100; lo que falta es el camino de
+red de los clientes.
 
 Hay además seis pruebas que **sí** llaman al modelo real, porque verifican algo
 que ninguna prueba con dobles puede: que el coach *obedezca* sus reglas, no que
@@ -295,6 +321,7 @@ el razonamiento que un diff no muestra.
 - [F1: el cerebro del coach](docs/recorrido/f1-cerebro-del-coach.md)
 - [F2: la voz](docs/recorrido/f2-voz.md)
 - [F3: la memoria](docs/recorrido/f3-memoria.md)
+- [F4: el perfil](docs/recorrido/f4-perfil.md)
 
 ---
 
