@@ -8,6 +8,7 @@ src.coaching.prompts.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from google import genai
@@ -104,3 +105,51 @@ class GeminiService:
             raise GeminiUnavailableError(f"empty response from model (finish={finish})")
 
         return text
+
+    async def extract(
+        self,
+        message: str,
+        system_prompt: str,
+        schema: dict,
+        history: list[dict[str, str]] | None = None,
+    ) -> dict:
+        """Ask for a JSON object matching `schema` and return it parsed.
+
+        The schema comes from the caller rather than living here, so the domain
+        keeps ownership of its own vocabulary and this client stays generic.
+
+        Temperature is zero: this is a reading task, and the variation that
+        makes coaching prose sound human makes extraction unreliable.
+        """
+        client = self._get_client()
+        config = types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.0,
+            max_output_tokens=self._settings.gemini_extraction_max_output_tokens,
+            response_mime_type="application/json",
+            response_schema=schema,
+        )
+
+        try:
+            response = await client.aio.models.generate_content(
+                model=self.model,
+                contents=self._to_contents(message, history),
+                config=config,
+            )
+        except Exception as exc:  # noqa: BLE001 - surfaced to the caller as one type
+            logger.exception("Gemini extraction request failed")
+            raise GeminiUnavailableError(str(exc)) from exc
+
+        try:
+            parsed = json.loads(response.text or "")
+        except (TypeError, ValueError) as exc:
+            # JSON mode makes this unlikely rather than impossible: a response
+            # truncated by the token budget is still valid JSON mode output and
+            # still unparseable.
+            logger.error("Gemini returned unparseable JSON: %r", response.text)
+            raise GeminiUnavailableError("model returned unparseable JSON") from exc
+
+        if not isinstance(parsed, dict):
+            raise GeminiUnavailableError(f"expected a JSON object, got {type(parsed).__name__}")
+
+        return parsed

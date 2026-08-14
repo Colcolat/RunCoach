@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     gemini_max_output_tokens: int = 1200
     gemini_temperature: float = 0.7
 
+    # Profile extraction is a second request per qualifying turn. Measured at
+    # about 300 tokens, so 400 leaves room without inviting a runaway. Turning
+    # it off costs personalisation and buys back half the daily request budget,
+    # which is the trade worth having available on the free tier.
+    profile_extraction_enabled: bool = True
+    gemini_extraction_max_output_tokens: int = 400
+
     # How many past turns are replayed to the model. Bounded because the free
     # tier caps tokens per minute, and because old turns stop being useful.
     history_limit: int = 20
