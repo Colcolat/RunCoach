@@ -14,6 +14,7 @@ from src.coaching.prompts import (
     EXPERIENCE_GUIDANCE,
     GOAL_GUIDANCE,
     build_system_prompt,
+    weeks_until,
     welcome_message,
 )
 
@@ -247,3 +248,23 @@ def test_the_coach_is_told_its_own_plan_is_not_kilometres_run():
 
     assert "no es kilometraje que el corredor haya corrido" in prompt
     assert "Nunca calcules el diez por ciento sobre tu propia propuesta" in prompt
+
+
+# --- weeks_until, shared by the prompt and the profile endpoint --------------
+
+def test_weeks_until_counts_whole_weeks():
+    assert weeks_until("2026-10-01", date(2026, 8, 14)) == 6
+
+
+def test_weeks_until_is_negative_once_the_race_has_passed():
+    assert weeks_until("2026-07-01", date(2026, 8, 14)) < 0
+
+
+def test_weeks_until_is_zero_inside_the_race_week():
+    assert weeks_until("2026-08-16", date(2026, 8, 14)) == 0
+
+
+@pytest.mark.parametrize("stored", [None, "", "en octubre", "2026-13-45"])
+def test_weeks_until_refuses_what_it_cannot_parse(stored):
+    """The column is text, so it can hold anything, and neither caller may crash."""
+    assert weeks_until(stored, date(2026, 8, 14)) is None

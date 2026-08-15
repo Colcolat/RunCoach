@@ -140,6 +140,25 @@ ganas de entrenar.""",
 }
 
 
+def weeks_until(race_date: str | None, today: date) -> int | None:
+    """Whole weeks from `today` to a race, negative once it has passed.
+
+    Returns None when there is no date or the stored value does not parse.
+
+    Public because two callers need the same number and two implementations of
+    it would eventually disagree: the prompt, so the coach can tell a race six
+    weeks out from one twenty weeks out, and the profile endpoint, so the
+    browser does not reimplement the arithmetic in JavaScript.
+    """
+    if not race_date:
+        return None
+    try:
+        parsed = date.fromisoformat(race_date)
+    except (ValueError, TypeError):
+        return None
+    return (parsed - today).days // 7
+
+
 def _describe_race_date(race_date: str, today: date | None) -> str:
     """Render the race date with the time left, not just the date.
 
@@ -153,17 +172,13 @@ def _describe_race_date(race_date: str, today: date | None) -> str:
     if today is None:
         return line
 
-    try:
-        parsed = date.fromisoformat(race_date)
-    except ValueError:
+    weeks = weeks_until(race_date, today)
+    if weeks is None:
         # Whatever is in the column, a malformed date must not break the prompt.
         return line
 
-    days = (parsed - today).days
-    if days < 0:
+    if weeks < 0:
         return f"{line} (ya pasó; pregunta si hay una nueva carrera en mente)"
-
-    weeks = days // 7
     if weeks == 0:
         return f"{line} (es esta misma semana)"
     if weeks == 1:

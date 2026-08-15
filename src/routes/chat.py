@@ -9,11 +9,13 @@ limitation in the README.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from src.agents.coach_agent import CoachAgent
+from src.coaching.prompts import weeks_until
 from src.dependencies import get_coach
 from src.services import db_service
 
@@ -41,6 +43,25 @@ class WelcomeResponse(BaseModel):
 class HistoryResponse(BaseModel):
     session_id: str
     messages: list[dict[str, str]]
+
+
+class ProfileResponse(BaseModel):
+    """What the coach knows about a runner, for the profile panel.
+
+    Every field is optional because nothing is ever asked for directly: the
+    profile fills in from conversation, so a first visit is legitimately empty
+    and the panel has to render that state.
+    """
+
+    session_id: str
+    username: str | None = None
+    goal: str | None = None
+    experience_level: str | None = None
+    weekly_km: float | None = None
+    race_date: str | None = None
+    # Computed here rather than in the browser, so the arithmetic the coach
+    # reasons with and the number the runner reads cannot drift apart.
+    weeks_to_race: int | None = None
 
 
 @router.get("/welcome", response_model=WelcomeResponse)
@@ -89,4 +110,25 @@ def history(session_id: str) -> HistoryResponse:
     return HistoryResponse(
         session_id=session_id,
         messages=db_service.get_history(conversation_id, limit=100),
+    )
+
+
+@router.get("/profile/{session_id}", response_model=ProfileResponse)
+def profile(session_id: str) -> ProfileResponse:
+    """What F4 has learned about this runner, for the panel to show.
+
+    Read-only on purpose. There is no PUT and no form behind this: the runner
+    never types their profile in, they mention it and the coach hears it. An
+    editable profile would be a second source of truth competing with the
+    conversation, and the conversation has to win.
+    """
+    user = db_service.get_or_create_user(web_session_id=session_id)
+    return ProfileResponse(
+        session_id=session_id,
+        username=user["username"],
+        goal=user["goal"],
+        experience_level=user["experience_level"],
+        weekly_km=user["weekly_km"],
+        race_date=user["race_date"],
+        weeks_to_race=weeks_until(user["race_date"], datetime.now(timezone.utc).date()),
     )
