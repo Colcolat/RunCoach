@@ -562,22 +562,25 @@ body {
 
 @media (min-width: 64rem) {
   body {
-    grid-template-columns: minmax(0, 1fr) 320px;
+    /* The reading column is capped rather than elastic: a conversation is text,
+       and text stops being readable long before it stops fitting. Capping the
+       track itself and centring the pair is what keeps a wide monitor growing
+       the outer margins instead of the gap between the conversation and the
+       panel next to it. An elastic 1fr column left roughly 700px of dead space
+       between the two on a 1900px screen. */
+    grid-template-columns: minmax(0, 52rem) 320px;
     grid-template-areas:
       "topbar profile"
       "stage  profile";
     grid-template-rows: auto 1fr;
+    justify-content: center;
     column-gap: var(--sp-xl);
-    padding-right: var(--sp-xl);
+    padding-inline: var(--sp-xl);
   }
 
-  .topbar {
-    padding-left: var(--sp-xl);
-  }
-
+  .topbar,
   .stage {
-    padding-left: var(--sp-xl);
-    max-width: 52rem;
+    padding-inline: 0;
   }
 
   .profile {
