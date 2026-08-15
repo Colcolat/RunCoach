@@ -2,35 +2,93 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
     <title>RunCoach</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
-    <main class="app">
-      <header class="header">
-        <h1>RunCoach</h1>
-        <p class="tagline">Tu entrenador de running, en voz</p>
-      </header>
+    <header class="topbar">
+      <h1 class="wordmark">RunCoach</h1>
+      <p class="tagline">Tu entrenador de running, en voz</p>
+    </header>
 
-      <div id="log" class="log" aria-live="polite"></div>
+    <!--
+      The profile is read-only. There is no form and no save button because the
+      runner never types this in: they mention it and the coach hears it.
+      Rendered once and shown two ways, as a panel beside the conversation on a
+      wide screen and as a strip of chips on a narrow one.
+    -->
+    <aside class="profile" id="profile" aria-labelledby="profile-title">
+      <h2 class="profile-title" id="profile-title">Tu perfil</h2>
+      <p class="profile-hint" id="profile-hint">
+        Se completa solo conforme hablas con el entrenador.
+      </p>
 
-      <p id="status" class="status">Listo para hablar o escribir</p>
+      <dl class="fields">
+        <div class="field" id="field-goal">
+          <dt>Objetivo</dt>
+          <dd data-value>sin registrar</dd>
+        </div>
+        <div class="field" id="field-level">
+          <dt>Nivel</dt>
+          <dd data-value>sin registrar</dd>
+        </div>
+        <div class="field" id="field-volume">
+          <dt>Volumen semanal</dt>
+          <dd data-value>sin registrar</dd>
+        </div>
+        <div class="field" id="field-race">
+          <dt>Carrera</dt>
+          <dd data-value>sin registrar</dd>
+          <dd class="countdown" data-countdown hidden></dd>
+        </div>
+      </dl>
+    </aside>
 
-      <div class="controls">
-        <button id="talk" type="button" class="talk">Hablar</button>
+    <main class="stage">
+      <!--
+        The voice control is the product, so it is the largest thing on the
+        page. `data-state` drives every visual difference between idle,
+        listening, thinking, speaking and unavailable.
+      -->
+      <section class="voice" id="voice" data-state="idle">
+        <div class="mic-wrap">
+          <span class="ring ring-pulse" aria-hidden="true"></span>
+          <span class="ring ring-sweep" aria-hidden="true"></span>
+          <span class="ring ring-wave" aria-hidden="true"></span>
 
-        <form id="composer" class="composer">
-          <input
-            id="text"
-            type="text"
-            placeholder="O escribe tu pregunta"
-            autocomplete="off"
-            maxlength="4000"
-          />
-          <button type="submit">Enviar</button>
-        </form>
-      </div>
+          <button id="talk" type="button" class="mic" aria-describedby="status">
+            <svg class="mic-on" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" />
+              <path d="M18 11a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.94V22h2v-3.06A8 8 0 0 0 20 11h-2Z" />
+            </svg>
+            <svg class="mic-off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M18 11a6 6 0 0 1-9.2 5.08l1.47-1.47A4 4 0 0 0 16 11h2Z" />
+              <path d="M15 11V6a3 3 0 0 0-5.9-.76l5.8 5.8c.06-.34.1-.69.1-1.04Z" />
+              <path d="M3.3 2.3 1.9 3.7 9 10.8V11a3 3 0 0 0 4.2 2.75l1.5 1.5A6 6 0 0 1 6 11H4a8 8 0 0 0 7 7.94V22h2v-3.06a8 8 0 0 0 3.2-1.15l3.1 3.11 1.41-1.41L3.3 2.3Z" />
+            </svg>
+            <span class="mic-label" id="mic-label">Hablar</span>
+          </button>
+        </div>
+
+        <!-- role=status so the state is announced, not only coloured. -->
+        <p class="status" id="status" role="status">Listo para hablar o escribir</p>
+      </section>
+
+      <div class="log" id="log" aria-live="polite" aria-label="Conversación"></div>
+
+      <form class="composer" id="composer">
+        <label class="sr-only" for="text">Escribe tu pregunta</label>
+        <input
+          id="text"
+          type="text"
+          placeholder="O escribe tu pregunta"
+          autocomplete="off"
+          maxlength="4000"
+        />
+        <button type="submit">Enviar</button>
+      </form>
     </main>
 
     <script src="/static/app.js"></script>

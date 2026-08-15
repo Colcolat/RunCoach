@@ -64,3 +64,89 @@ def test_the_client_reads_the_sample_rates_from_the_handshake():
 
     assert "message.output_sample_rate" in source
     assert "message.input_sample_rate" in source
+
+
+# --- F5: the designed interface ----------------------------------------------
+
+@pytest.mark.parametrize("asset", ["index.html", "app.js", "style.css"])
+def test_the_client_pulls_nothing_from_the_internet(asset):
+    """The design arrived as Tailwind from a CDN plus two Google Fonts.
+
+    All of it was inlined. A page that fetches from someone else's host fails
+    offline, leaks the visitor to a third party, and adds a runtime dependency
+    to a deployment (F7) that has no reason to carry one. Tailwind's own docs
+    call the CDN build development-only.
+    """
+    source = (WEB / asset).read_text(encoding="utf-8")
+
+    assert "http://" not in source
+    assert "https://" not in source
+
+
+def test_the_voice_control_has_a_distinct_look_for_every_state():
+    """State must be visible, which was the point of the brief asking for it."""
+    css = (WEB / "style.css").read_text(encoding="utf-8")
+
+    for state in ("listening", "thinking", "speaking", "unavailable"):
+        assert f'[data-state="{state}"]' in css, f"falta el estado {state}"
+
+
+def test_the_state_is_readable_without_seeing_colour():
+    """Colour alone would leave the state invisible to some of the people using it."""
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+
+    assert 'role="status"' in page
+    for spoken in ("Escuchando", "Pensando", "El entrenador está hablando"):
+        assert spoken in script
+
+
+def test_the_panel_has_a_slot_for_every_field_the_api_returns():
+    """A field added to the endpoint with nowhere to land would vanish silently."""
+    from src.routes.chat import ProfileResponse
+
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+
+    shown = {"goal": "field-goal", "experience_level": "field-level",
+             "weekly_km": "field-volume", "race_date": "field-race"}
+    for field, slot in shown.items():
+        assert slot in page, f"el panel no tiene sitio para {field}"
+        assert field in script, f"app.js no lee {field}"
+
+    # Everything the endpoint returns is either displayed or deliberately not.
+    ignored = {"session_id", "username", "weeks_to_race"}
+    assert set(ProfileResponse.model_fields) == set(shown) | ignored
+
+
+def test_the_panel_never_offers_to_edit_the_profile():
+    """The runner speaks their profile; a form would compete with the conversation."""
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+
+    assert "field-goal" in page  # the panel exists
+    assert "<form" in page  # the composer does too
+    assert page.count("<form") == 1, "solo el composer debe ser un formulario"
+
+
+def test_a_degraded_reply_is_marked_as_the_app_speaking():
+    """A rate limit clears in a minute and must not read like a broken coach."""
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+    css = (WEB / "style.css").read_text(encoding="utf-8")
+
+    assert "notice: data.degraded" in script
+    assert ".bubble.notice" in css
+
+
+def test_the_weeks_to_the_race_come_from_the_server():
+    """Recomputing them here would be free to disagree with what the coach says."""
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+
+    assert "data.weeks_to_race" in script
+
+
+@pytest.mark.parametrize("asset", ["index.html", "app.js", "style.css"])
+def test_the_interface_carries_no_emoji(asset):
+    """A house rule, and the design tool inserts them unless told not to."""
+    source = (WEB / asset).read_text(encoding="utf-8")
+
+    assert not [c for c in source if ord(c) > 0x2100], "hay emoji o pictogramas"

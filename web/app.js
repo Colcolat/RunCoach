@@ -38,16 +38,43 @@ const state = {
 
 const el = (id) => document.getElementById(id);
 
+// --- voice state -------------------------------------------------------------
+
+/**
+ * One attribute drives every visual difference between idle, listening,
+ * thinking, speaking and unavailable. Keeping it in the DOM rather than in
+ * scattered class toggles means the CSS owns the appearance and this file only
+ * ever says which state we are in.
+ *
+ * The status line is set alongside it, never instead of it: colour alone would
+ * leave the state invisible to anyone who cannot see the difference.
+ */
+function setState(name, message) {
+  el("voice").dataset.state = name;
+  if (message !== undefined) el("status").textContent = message;
+}
+
+function setLabel(text) {
+  el("mic-label").textContent = text;
+}
+
 // --- conversation view -------------------------------------------------------
 
-function addBubble(role, text, { partial = false } = {}) {
+function addBubble(role, text, { partial = false, notice = false } = {}) {
   const log = el("log");
   const node = document.createElement("div");
-  node.className = `bubble ${role}${partial ? " partial" : ""}`;
+  node.className = `bubble ${role}${partial ? " partial" : ""}${notice ? " notice" : ""}`;
   node.textContent = text;
   log.appendChild(node);
   log.scrollTop = log.scrollHeight;
   return node;
+}
+
+function addDivider(text) {
+  const node = document.createElement("p");
+  node.className = "divider";
+  node.textContent = text;
+  el("log").appendChild(node);
 }
 
 /**
@@ -73,10 +100,74 @@ function finishTurn() {
   }
 }
 
-function setStatus(text, kind = "") {
-  const node = el("status");
-  node.textContent = text;
-  node.className = `status ${kind}`;
+// --- profile panel -----------------------------------------------------------
+
+const LEVEL_LABELS = {
+  principiante: "Principiante",
+  intermedio: "Intermedio",
+  avanzado: "Avanzado",
+};
+
+function setField(id, value, { countdown } = {}) {
+  const field = el(id);
+  const known = value !== null && value !== undefined && value !== "";
+
+  field.dataset.empty = known ? "false" : "true";
+  field.querySelector("[data-value]").textContent = known ? value : "sin registrar";
+
+  const slot = field.querySelector("[data-countdown]");
+  if (slot) {
+    slot.hidden = !countdown;
+    if (countdown) slot.textContent = countdown;
+  }
+  return known;
+}
+
+/** Turn "2026-10-01" into "1 de octubre de 2026", in the reader's locale rules. */
+function spellDate(iso) {
+  const parsed = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/**
+ * The weeks come from the server, which already computes them for the coach's
+ * prompt. Recomputing here would be a second implementation of the same
+ * arithmetic, free to disagree with the one the coach reasons from.
+ */
+function raceCountdown(weeks) {
+  if (weeks === null || weeks === undefined) return null;
+  if (weeks < 0) return "ya pasó";
+  if (weeks === 0) return "es esta semana";
+  if (weeks === 1) return "falta 1 semana";
+  return `faltan ${weeks} semanas`;
+}
+
+async function refreshProfile() {
+  let data;
+  try {
+    const response = await fetch(`/api/profile/${sessionId()}`);
+    data = await response.json();
+  } catch (error) {
+    // The panel is informational. Failing to read it must not disturb the
+    // conversation, which is what the runner actually came for.
+    return;
+  }
+
+  const known = [
+    setField("field-goal", data.goal),
+    setField("field-level", LEVEL_LABELS[data.experience_level] || data.experience_level),
+    setField("field-volume", data.weekly_km ? `${data.weekly_km} km por semana` : null),
+    setField("field-race", data.race_date ? spellDate(data.race_date) : null, {
+      countdown: raceCountdown(data.weeks_to_race),
+    }),
+  ].some(Boolean);
+
+  el("profile").dataset.known = known ? "true" : "false";
 }
 
 // --- playback ----------------------------------------------------------------
@@ -110,10 +201,10 @@ function playChunk(arrayBuffer) {
   source.start(startAt);
   state.nextPlayTime = startAt + buffer.duration;
 
-  setStatus("El entrenador está hablando", "speaking");
+  setState("speaking", "El entrenador está hablando");
   source.onended = () => {
     if (ctx.currentTime >= state.nextPlayTime - 0.05 && state.listening) {
-      setStatus("Escuchando", "listening");
+      setState("listening", "Escuchando");
     }
   };
 }
@@ -122,7 +213,7 @@ function playChunk(arrayBuffer) {
 
 async function startVoice() {
   try {
-    setStatus("Pidiendo permiso del micrófono", "");
+    setState("idle", "Pidiendo permiso del micrófono");
     state.micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
@@ -132,7 +223,7 @@ async function startVoice() {
       },
     });
   } catch (error) {
-    setStatus("Sin acceso al micrófono. Puedes escribir abajo.", "error");
+    setState("unavailable", "Sin acceso al micrófono. Puedes escribir abajo.");
     return;
   }
 
@@ -156,24 +247,29 @@ async function startVoice() {
         state.outputRate = message.output_sample_rate;
         await openMicrophone(message.input_sample_rate);
         state.listening = true;
-        setStatus("Escuchando", "listening");
-        el("talk").textContent = "Terminar";
-        el("talk").classList.add("active");
+        setState("listening", "Escuchando");
+        setLabel("Terminar");
         break;
       case "transcript":
+        // The runner's own words coming back means the model is transcribing,
+        // not composing yet; the coach's mean it has started answering.
+        if (message.role === "coach") setState("thinking", "Pensando");
         appendTranscript(message.role, message.text);
         break;
       case "turn_complete":
         finishTurn();
+        // A spoken turn can carry profile data too, and it was just persisted.
+        refreshProfile();
         break;
       case "fallback":
         finishTurn();
-        stopVoice(fallbackText(message.reason));
+        stopVoice(fallbackText(message.reason), "unavailable");
         break;
     }
   };
 
-  socket.onerror = () => setStatus("Error de conexión. Puedes escribir abajo.", "error");
+  socket.onerror = () =>
+    setState("unavailable", "Error de conexión. Puedes escribir abajo.");
   socket.onclose = () => {
     if (state.listening) stopVoice("Sesión de voz terminada.");
   };
@@ -216,7 +312,7 @@ async function openMicrophone(inputRate) {
   state.workletNode = node;
 }
 
-function stopVoice(message) {
+function stopVoice(message, endState = "idle") {
   state.listening = false;
 
   if (state.socket && state.socket.readyState === WebSocket.OPEN) {
@@ -235,9 +331,8 @@ function stopVoice(message) {
   }
   state.workletNode = null;
 
-  el("talk").textContent = "Hablar";
-  el("talk").classList.remove("active");
-  setStatus(message || "Listo para hablar o escribir", "");
+  setLabel("Hablar");
+  setState(endState, message || "Listo para hablar o escribir");
 }
 
 // --- text chat ---------------------------------------------------------------
@@ -250,7 +345,7 @@ async function sendText(event) {
 
   input.value = "";
   addBubble("user", message);
-  setStatus("Pensando", "thinking");
+  setState("thinking", "Pensando");
 
   try {
     const response = await fetch("/api/chat", {
@@ -259,11 +354,17 @@ async function sendText(event) {
       body: JSON.stringify({ message, session_id: sessionId() }),
     });
     const data = await response.json();
-    addBubble("coach", data.reply);
-    setStatus(data.degraded ? "Respuesta de respaldo" : "Listo", data.degraded ? "error" : "");
+    // A degraded reply is the application speaking, not the coach, and it reads
+    // as one: a rate limit clears in under a minute and should not look like a
+    // failure of the conversation.
+    addBubble("coach", data.reply, { notice: data.degraded });
+    setState("idle", data.degraded ? "Respuesta de respaldo" : "Listo para hablar o escribir");
+    if (!data.degraded) refreshProfile();
   } catch (error) {
-    addBubble("coach", "No pude conectar con el entrenador. Intenta de nuevo.");
-    setStatus("Error de conexión", "error");
+    addBubble("coach", "No pude conectar con el entrenador. Intenta de nuevo.", {
+      notice: true,
+    });
+    setState("unavailable", "Error de conexión");
   }
 }
 
@@ -276,16 +377,18 @@ async function boot() {
   });
   el("composer").addEventListener("submit", sendText);
 
+  refreshProfile();
+
   // Replay first. A returning runner should find the conversation where they
   // left it, not a greeting that pretends they have never been here.
   try {
     const stored = await fetch(`/api/history/${sessionId()}`);
     const { messages } = await stored.json();
-    for (const message of messages) {
-      addBubble(message.role === "user" ? "user" : "coach", message.content);
-    }
     if (messages.length) {
-      setStatus("Retomamos donde lo dejaste");
+      addDivider("Retomamos donde lo dejaste");
+      for (const message of messages) {
+        addBubble(message.role === "user" ? "user" : "coach", message.content);
+      }
       return;
     }
   } catch (error) {
