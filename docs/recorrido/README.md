@@ -13,6 +13,7 @@ es el razonamiento detrás del código, que es justo lo que un diff no muestra.
 | F2 | [La voz](f2-voz.md) | Live API, proxy WebSocket, captura de audio, presupuesto |
 | F3 | [La memoria](f3-memoria.md) | Modelos, persistencia, historial unificado, reglas verificadas |
 | F4 | [El perfil](f4-perfil.md) | Extracción estructurada, compuerta de cuota, validación, límites por modelo |
+| F5 | [La interfaz](f5-interfaz.md) | Diseño adaptado, estados de voz, panel de perfil, layout responsive |
 
 ## Cómo leerlas
 

@@ -53,8 +53,8 @@ suite en verde y se comitea sólo después de haberse ejecutado.
 | F2 | Voz conversacional con la Live API | Hecho |
 | F3 | Memoria entre sesiones | Hecho |
 | F4 | Perfil del corredor extraído de la conversación | Hecho |
-| F5 | Interfaz web | Siguiente |
-| F6 | Recordatorios proactivos por Telegram | Planeado |
+| F5 | Interfaz web | Hecho |
+| F6 | Recordatorios proactivos por Telegram | Siguiente |
 | F7 | Despliegue | Planeado |
 | F8 | Entrega | Planeado |
 
@@ -64,8 +64,9 @@ entre recargas, y hablar y escribir alimentan un mismo historial, así que se
 puede empezar por voz y seguir por texto sin perder el hilo. **Y toma nota**: el
 objetivo, el nivel, el volumen semanal y la fecha de carrera se leen de lo que el
 corredor cuenta y quedan registrados, así que la personalización sobrevive a la
-conversación que la produjo. Lo que falta es la interfaz de verdad, que es F5.
-Este README se actualiza conforme cada fragmento existe, no antes.
+conversación que la produjo, y se ven en un panel al lado. Lo que falta es que
+sepa buscarte cuando la pestaña está cerrada, que es F6. Este README se
+actualiza conforme cada fragmento existe, no antes.
 
 Una conversación hablada real, verificada de punta a punta contra la API:
 
@@ -162,7 +163,18 @@ Cada elección está medida contra la API real, no supuesta.
 | Texto | `gemini-3.5-flash-lite` | 1.26 s medidos, sin razonamiento interno; 500 requests/día vs. 20 de los modelos no-lite |
 | Extracción de perfil | `gemini-3.1-flash-lite` | Deliberadamente otro id: los límites de frecuencia son por modelo, así que leer el perfil no compite con responder |
 | Persistencia | SQLite con SQLAlchemy 2.0 | Cero configuración; el ORM deja abierta la ruta a PostgreSQL |
+| Interfaz | HTML y CSS sin dependencias | El diseño se generó en Google Stitch y se reescribió: su salida traía Tailwind por CDN, dos fuentes externas y cuatro lienzos WebGL |
 | Recordatorios | Telegram con APScheduler | Lo único que una pestaña cerrada no puede hacer |
+
+**Sobre la interfaz:** El cliente no descarga nada de internet, y hay una prueba
+que falla si vuelve a hacerlo. Un CDN es una dependencia de runtime sobre el
+servidor de otro, las fuentes externas bloquean el primer pintado y fallan sin
+conexión, y los anillos del micrófono son animaciones CSS que solo corren en el
+estado que las usa, en lugar de cuatro contextos WebGL animando para siempre.
+
+El estado de la voz se dice en texto además de en color, bajo `role="status"`:
+saber si te está escuchando no es un adorno en una interfaz de voz, es la
+interfaz.
 
 **Sobre los modelos:** Los modelos con razonamiento interno resultaron entre cinco
 y trece veces más lentos, y sus tokens de razonamiento se descuentan del
@@ -289,7 +301,7 @@ pytest --cov=src --cov-report=term-missing
 Las pruebas no tocan la red. El modelo y el bot se sustituyen por dobles, así
 que la suite es determinista y corre sin credenciales.
 
-199 pruebas sin red, 93 por ciento de cobertura. Las reglas de entrenamiento, la
+223 pruebas sin red, 94 por ciento de cobertura. Las reglas de entrenamiento, la
 extracción de perfil y la persistencia están al 100; lo que falta es el camino de
 red de los clientes.
 
@@ -335,6 +347,7 @@ el razonamiento que un diff no muestra.
 - [F2: la voz](docs/recorrido/f2-voz.md)
 - [F3: la memoria](docs/recorrido/f3-memoria.md)
 - [F4: el perfil](docs/recorrido/f4-perfil.md)
+- [F5: la interfaz](docs/recorrido/f5-interfaz.md)
 
 ---
 
