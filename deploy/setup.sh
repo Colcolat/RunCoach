@@ -18,6 +18,9 @@ DOMAIN="${1:?uso: setup.sh <dominio> <correo>}"
 EMAIL="${2:?uso: setup.sh <dominio> <correo>}"
 
 REPO="https://github.com/Colcolat/RunCoach.git"
+# Overridable so the first provisioning run can pull the branch that carries
+# this very script, before it is merged.
+BRANCH="${BRANCH:-master}"
 APP_DIR="/opt/runcoach"
 ENV_DIR="/etc/runcoach"
 
@@ -38,10 +41,10 @@ id runcoach &>/dev/null || useradd --system --shell /usr/sbin/nologin --home "$A
 say "codigo"
 if [[ -d "$APP_DIR/.git" ]]; then
     git -C "$APP_DIR" fetch --quiet origin
-    git -C "$APP_DIR" reset --hard --quiet origin/master
+    git -C "$APP_DIR" reset --hard --quiet "origin/$BRANCH"
 else
     rm -rf "$APP_DIR"
-    git clone --quiet "$REPO" "$APP_DIR"
+    git clone --quiet --branch "$BRANCH" "$REPO" "$APP_DIR"
 fi
 
 # The database lives outside the checkout, so `git reset --hard` on the next
