@@ -131,7 +131,7 @@ def mentions_profile_information(message: str) -> bool:
 
 # --- the prompt --------------------------------------------------------------
 
-def build_extraction_prompt(today: date) -> str:
+def build_extraction_prompt(today: date, now_local: str | None = None) -> str:
     """The instruction for the extraction call.
 
     Today's date is injected rather than left to the model. Asked for "octubre"
@@ -140,9 +140,20 @@ def build_extraction_prompt(today: date) -> str:
     coach would otherwise reason about. `clean` rejects past dates as well; this
     is the fix and that is the guard.
     """
+    # The clock, not just the calendar. Without it "recuérdame en dos minutos"
+    # is unanswerable: the model has no way to turn a relative time into the
+    # wall-clock time the reminders table stores, so it returns nothing and the
+    # request silently does nothing. Local time, not UTC, because that is the
+    # zone the reminder will be read back in.
+    clock = (
+        f"\nAhora son las {now_local} (hora local del corredor)."
+        if now_local
+        else ""
+    )
+
     return f"""Extraes datos del perfil de un corredor a partir de lo que dice en una conversación.
 
-Hoy es {today.isoformat()}.
+Hoy es {today.isoformat()}.{clock}
 
 Devuelve únicamente lo que la persona dijo de forma explícita. Si un dato hay que deducirlo o \
 suponerlo, devuelve null. Devolver null es mucho mejor que arriesgar un valor equivocado: este \

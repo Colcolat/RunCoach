@@ -268,3 +268,25 @@ def test_weeks_until_is_zero_inside_the_race_week():
 def test_weeks_until_refuses_what_it_cannot_parse(stored):
     """The column is text, so it can hold anything, and neither caller may crash."""
     assert weeks_until(stored, date(2026, 8, 14)) is None
+
+
+# --- the coach knows what it can do ------------------------------------------
+
+def test_the_coach_knows_it_can_set_reminders():
+    """Found in a real conversation. Asked to be reminded, the coach answered
+    "no puedo hacer eso, mi trabajo es solo ayudarte con el entrenamiento" - and
+    it was right to, because nothing in its briefing said otherwise. F6 was
+    built, deployed and working, and completely invisible to the one part of the
+    system a runner actually talks to."""
+    prompt = build_system_prompt({})
+
+    assert "recordarle" in prompt
+    assert "Telegram" in prompt
+
+
+def test_it_is_told_not_to_deny_the_capability():
+    """A model asked for something outside its brief will decline politely, which
+    is exactly the failure this prevents."""
+    prompt = build_system_prompt({})
+
+    assert "Nunca digas que no puedes recordar" in prompt

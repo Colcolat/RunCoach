@@ -178,3 +178,23 @@ def test_the_prompt_separates_weekly_volume_from_one_session():
 
 def test_the_prompt_reads_the_last_message_not_the_whole_history():
     assert "ÚLTIMO mensaje" in build_extraction_prompt(TODAY)
+
+
+# --- relative times ----------------------------------------------------------
+
+def test_the_extractor_is_given_a_clock_when_there_is_one():
+    """"recuérdame en dos minutos" is unanswerable without one: the model cannot
+    turn a relative time into the wall-clock time the reminders table stores, so
+    it returns nothing and the request silently does nothing."""
+    prompt = build_extraction_prompt(date(2026, 8, 16), now_local="15:33")
+
+    assert "15:33" in prompt
+    assert "relativas" in prompt
+
+
+def test_without_a_clock_it_says_nothing_about_the_time():
+    """The date alone is still valid for everything except reminders."""
+    prompt = build_extraction_prompt(date(2026, 8, 16))
+
+    assert "Ahora son las" not in prompt
+    assert "2026-08-16" in prompt

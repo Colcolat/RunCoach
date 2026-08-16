@@ -15,6 +15,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from src.coaching.extraction import (
     EXTRACTION_SCHEMA,
@@ -177,10 +178,19 @@ class CoachAgent:
             return {}
 
         today = datetime.now(timezone.utc).date()
+        # The runner's wall clock, so "en dos minutos" can be resolved into the
+        # HH:MM the reminders table stores, and in the zone it is read back in.
+        try:
+            local_now = datetime.now(ZoneInfo(get_settings().reminder_timezone))
+        except Exception:  # noqa: BLE001 - a bad zone must not cost the extraction
+            local_now = datetime.now(timezone.utc)
+
         try:
             raw = await self._gemini.extract(
                 message=message,
-                system_prompt=build_extraction_prompt(today),
+                system_prompt=build_extraction_prompt(
+                    today, now_local=local_now.strftime("%H:%M")
+                ),
                 schema=EXTRACTION_SCHEMA,
                 history=(history or [])[-HISTORY_TURNS:],
             )
