@@ -14,6 +14,10 @@ SQLAlchemy>=2.0.52,<2.1
 # Model provider. google-generativeai is retired; google-genai replaces it.
 google-genai>=2.18,<3
 
+# Reminders. Both are pure Python wheels, so the no-compiler guarantee holds.
+python-telegram-bot>=22.8,<23
+apscheduler>=3.11,<4
+
 # Configuration
 python-dotenv>=1.2,<2
 

@@ -68,11 +68,53 @@ def isolated_database(tmp_path, monkeypatch):
 
 
 def _clear_caches() -> None:
+    # Dispose before dropping the reference. Clearing the cache alone abandons
+    # the connection pool for the garbage collector, which showed up as a pile
+    # of "unclosed database" ResourceWarnings, one per test. Harmless in
+    # production, where the engine lives as long as the process, but warnings
+    # that are always there are warnings nobody reads.
+    if database.get_engine.cache_info().currsize:
+        database.get_engine().dispose()
+
     get_settings.cache_clear()
     database.get_engine.cache_clear()
     database.get_session_factory.cache_clear()
     dependencies.get_gemini.cache_clear()
     dependencies.get_coach.cache_clear()
+    dependencies.get_telegram.cache_clear()
+
+
+class StubTelegram:
+    """Stands in for the bot. Records what would have been delivered.
+
+    F6 is the only part of the system that acts without being asked, so what
+    matters in tests is not that a message was formatted but that it was sent,
+    to whom, and exactly once.
+    """
+
+    def __init__(self, username: str = "RunCoachTestBot") -> None:
+        self.username = username
+        self.sent: list[tuple[int, str]] = []
+        self.fail_with: Exception | None = None
+
+    @property
+    def enabled(self) -> bool:
+        return True
+
+    def deep_link(self, session_id: str) -> str | None:
+        if not self.username:
+            return None
+        return f"https://t.me/{self.username}?start={session_id}"
+
+    async def send(self, chat_id: int, text: str) -> None:
+        if self.fail_with is not None:
+            raise self.fail_with
+        self.sent.append((chat_id, text))
+
+
+@pytest.fixture
+def telegram() -> StubTelegram:
+    return StubTelegram()
 
 
 @pytest.fixture

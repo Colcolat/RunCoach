@@ -19,7 +19,12 @@ def schema():
 
 
 def test_every_table_shares_one_metadata_registry():
-    assert set(Base.metadata.tables) == {"users", "conversations", "messages"}
+    assert set(Base.metadata.tables) == {
+        "users",
+        "conversations",
+        "messages",
+        "reminders",
+    }
 
 
 # --- identity ----------------------------------------------------------------

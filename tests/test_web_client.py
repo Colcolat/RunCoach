@@ -109,13 +109,17 @@ def test_the_panel_has_a_slot_for_every_field_the_api_returns():
     script = (WEB / "app.js").read_text(encoding="utf-8")
 
     shown = {"goal": "field-goal", "experience_level": "field-level",
-             "weekly_km": "field-volume", "race_date": "field-race"}
+             "weekly_km": "field-volume", "race_date": "field-race",
+             "telegram_url": "telegram-link"}
     for field, slot in shown.items():
         assert slot in page, f"el panel no tiene sitio para {field}"
         assert field in script, f"app.js no lee {field}"
 
     # Everything the endpoint returns is either displayed or deliberately not.
-    ignored = {"session_id", "username", "weeks_to_race"}
+    # weeks_to_race and reminder_at are rendered into other fields' text rather
+    # than getting a slot of their own.
+    ignored = {"session_id", "username", "weeks_to_race", "telegram_linked",
+               "reminder_at"}
     assert set(ProfileResponse.model_fields) == set(shown) | ignored
 
 

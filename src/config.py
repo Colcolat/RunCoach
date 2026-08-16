@@ -58,6 +58,36 @@ class Settings(BaseSettings):
     # recognise as speech, no turn ever completes and a naive loop hangs.
     voice_idle_timeout: float = 60.0
 
+    # Telegram, from @BotFather. The username has no @ and is only used to build
+    # the deep link the web client offers, so a missing one hides that button
+    # rather than producing a broken t.me address.
+    telegram_bot_token: str = ""
+    telegram_bot_username: str = ""
+
+    # Reminders are the one thing a closed tab cannot do, and the only part of
+    # the system that acts without being asked. All of it is switchable.
+    reminders_enabled: bool = True
+
+    # "Seven in the morning" is a wall clock, and a wall clock needs a place.
+    # One zone for everyone is a real limitation, stated in the README: the
+    # browser knows its own, and asking for it is a later fragment.
+    reminder_timezone: str = "America/Mexico_City"
+
+    # How often the sweep asks what is due. A minute is fine: the query is one
+    # indexed read, and a coarser tick would make the grace window do more work
+    # than it should.
+    reminder_sweep_seconds: int = 60
+
+    # Silence long enough to be worth noticing, and how long to wait before
+    # noticing it again. Without the cooldown the same silence nudges on every
+    # sweep, which is how a helpful bot gets blocked.
+    inactivity_after_days: int = 3
+    inactivity_cooldown_days: int = 7
+
+    @property
+    def telegram_enabled(self) -> bool:
+        return bool(self.telegram_bot_token.strip())
+
     @property
     def gemini_enabled(self) -> bool:
         return bool(self.google_api_key.strip())

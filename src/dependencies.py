@@ -12,6 +12,7 @@ from functools import lru_cache
 from src.agents.coach_agent import CoachAgent
 from src.services.gemini_service import GeminiService
 from src.services.live_service import LiveVoiceService
+from src.services.telegram_service import TelegramService
 
 
 @lru_cache
@@ -27,3 +28,8 @@ def get_live() -> LiveVoiceService:
 @lru_cache
 def get_coach() -> CoachAgent:
     return CoachAgent(gemini=get_gemini())
+
+
+@lru_cache
+def get_telegram() -> TelegramService:
+    return TelegramService()

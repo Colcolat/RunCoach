@@ -611,3 +611,54 @@ body {
     font-size: var(--step-stat);
   }
 }
+
+/* --- telegram -------------------------------------------------------------- */
+
+.telegram {
+  margin-top: var(--sp-md);
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--outline);
+}
+
+.telegram-link {
+  display: inline-block;
+  padding: var(--sp-sm) var(--sp-md);
+  font-size: var(--step-label);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--bg);
+  background: var(--accent-strong);
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+.telegram-link:hover {
+  background: var(--accent);
+}
+
+.telegram-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.telegram-note {
+  margin: var(--sp-sm) 0 0;
+  font-size: var(--step-label);
+  color: var(--text-muted);
+}
+
+/* On a narrow screen the panel is a strip of chips, and this sits under it
+   rather than trying to become one. */
+@media (max-width: 63.99rem) {
+  .telegram {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-md);
+    flex-wrap: wrap;
+  }
+  .telegram-note {
+    margin: 0;
+    flex: 1;
+    min-width: 12rem;
+  }
+}

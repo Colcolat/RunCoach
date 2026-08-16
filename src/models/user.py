@@ -49,6 +49,10 @@ class User(Base):
     conversations: Mapped[list["Conversation"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    reminders: Mapped[list["Reminder"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 from src.models.conversation import Conversation  # noqa: E402  (resolves the annotation)
+from src.models.reminder import Reminder  # noqa: E402  (resolves the annotation)

@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from src.coaching.extraction import (
     EXTRACTION_SCHEMA,
     HISTORY_TURNS,
+    REMINDER_FIELD,
     build_extraction_prompt,
     clean,
     mentions_profile_information,
@@ -127,11 +128,19 @@ class CoachAgent:
         )
 
         if updates:
+            # A requested reminder time is not a profile column, it is a row in
+            # `reminders`. Taken out here so update_profile keeps receiving only
+            # things that belong on the user.
+            at_time = updates.pop(REMINDER_FIELD, None)
+            if at_time:
+                self._db.set_daily_reminder(user["id"], at_time)
+
             # This turn's reply was composed against the profile as it was
             # before, which costs nothing: the model already saw the runner say
             # it, in this very message. What the write buys is the next session,
             # when the conversation is gone and the profile is all that is left.
-            self._db.update_profile(user["id"], **updates)
+            if updates:
+                self._db.update_profile(user["id"], **updates)
 
         # Persist after answering, and persist both sides. Saving the question
         # first would leave an unanswered turn in history if the model failed,
