@@ -33,6 +33,23 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq python3-venv python3-pip git nginx certbot python3-certbot-nginx
 
+say "memoria de intercambio"
+# Ubuntu cloud images ship with no swap, and the free-tier instance has 1 GiB of
+# RAM. That is enough to run this, but not enough to be relaxed about: pip
+# resolving dependencies and a voice session buffering audio can spike, and
+# without swap the kernel does not slow down, it kills the process. A 1 GiB file
+# turns a hard failure into a slow moment.
+if ! swapon --show | grep -q .; then
+    fallocate -l 1G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile >/dev/null
+    swapon /swapfile
+    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    echo "  1 GiB de swap creado"
+else
+    echo "  ya hay swap activo"
+fi
+
 say "usuario de servicio"
 # No login shell and no home worth stealing: this account exists to own one
 # directory and run one process.
