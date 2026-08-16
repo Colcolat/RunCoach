@@ -1,0 +1,57 @@
+# RunCoach as a system service.
+#
+# Restart=always is the point of this file. The application polls Telegram and
+# runs a reminder sweep, so a process that dies at three in the morning does not
+# just stop serving pages: it stops reminding people, and nothing notices until
+# a runner mentions it. An instance reboot has to bring it back too, which is
+# what WantedBy=multi-user.target does.
+
+[Unit]
+Description=RunCoach conversational running coach
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=runcoach
+Group=runcoach
+WorkingDirectory=/opt/runcoach
+
+# Secrets live here, root-owned and readable only by this service. They are not
+# in the repository, not in the unit file, and not in the process arguments,
+# where `ps` would show them to anyone on the box.
+EnvironmentFile=/etc/runcoach/runcoach.env
+
+# One worker on purpose. Two would poll Telegram concurrently, which Telegram
+# answers with 409 Conflict, and run two reminder sweeps, which is two messages
+# for one reminder. The concurrency this application needs is asyncio inside a
+# single process.
+ExecStart=/opt/runcoach/venv/bin/uvicorn src.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 1 \
+    --proxy-headers \
+    --forwarded-allow-ips=127.0.0.1
+
+Restart=always
+RestartSec=5
+
+# Give up restarting only if it fails five times in a minute, which means the
+# failure is real rather than transient, and leave it failed so systemctl status
+# says so instead of hiding it in a restart loop.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=runcoach
+
+# The service needs to write exactly one thing: its database.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/runcoach/data
+
+[Install]
+WantedBy=multi-user.target
