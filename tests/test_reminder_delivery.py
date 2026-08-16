@@ -308,3 +308,13 @@ def test_a_missing_bot_does_not_make_the_application_unhealthy(client):
     body = client.get("/health").json()
 
     assert body["status"] == "healthy"
+
+
+def test_the_suite_can_never_start_a_real_bot():
+    """Found by configuring one: Settings reads .env, so a developer with a real
+    token had every app-building test polling Telegram over the network, and the
+    suite went from nine seconds to a hundred and sixty. The fixture blanks it;
+    this is what notices if that stops being true."""
+    from src.config import get_settings
+
+    assert get_settings().telegram_enabled is False

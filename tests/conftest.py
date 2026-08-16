@@ -55,13 +55,22 @@ class StubGemini:
 
 @pytest.fixture(autouse=True)
 def isolated_database(tmp_path, monkeypatch):
-    """Point every test at its own SQLite file.
+    """Give every test its own database and no way to reach the outside world.
 
     The engine, session factory and settings are all lru_cached, so the caches
     have to be cleared after the environment changes or the first test would
     pin the real database for the whole run.
+
+    The Telegram token is blanked for a reason found the hard way. Settings
+    reads .env, so once a developer configures a real bot, every test that
+    builds the app starts it: the suite began polling Telegram over the network
+    and went from nine seconds to a hundred and sixty. A suite that behaves
+    differently depending on who is running it is not a suite. Tests that need a
+    configured bot build their own Settings, explicitly.
     """
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "")
+    monkeypatch.setenv("TELEGRAM_BOT_USERNAME", "")
     _clear_caches()
     yield
     _clear_caches()
