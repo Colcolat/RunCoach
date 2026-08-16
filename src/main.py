@@ -9,8 +9,11 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.bot import handle_message, handle_start
 from src.config import get_settings
 from src.database import check_connection
+from src.dependencies import get_coach, get_telegram
+from src.scheduler import build_scheduler
 from src.services.db_service import create_schema
 from src.routes import chat, health, voice
 
@@ -35,8 +38,42 @@ async def lifespan(app: FastAPI):
     if not settings.gemini_enabled:
         logger.warning("GOOGLE_API_KEY not set - the coach will reply in degraded mode")
 
+    # Reminders are the only part of the system that acts unasked, so they are
+    # also the only part that can fail with nobody watching. Neither the bot nor
+    # the sweep may take the application down: a runner who came for the web
+    # client should not lose it because Telegram is unreachable.
+    telegram = get_telegram()
+    scheduler = None
+
+    if settings.telegram_enabled:
+        coach = get_coach()
+        try:
+            await telegram.start(
+                on_link=handle_start,
+                on_message=lambda chat_id, text, name: handle_message(
+                    coach, chat_id, text, name
+                ),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Telegram bot failed to start; continuing without it")
+    else:
+        logger.warning("TELEGRAM_BOT_TOKEN not set - reminders will not be delivered")
+
+    if settings.reminders_enabled and settings.telegram_enabled:
+        try:
+            scheduler = build_scheduler(telegram)
+            scheduler.start()
+            logger.info("Reminder sweep every %ss", settings.reminder_sweep_seconds)
+        except Exception:  # noqa: BLE001
+            logger.exception("Reminder scheduler failed to start; continuing without it")
+            scheduler = None
+
     logger.info("RunCoach started")
     yield
+
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
+    await telegram.stop()
     logger.info("RunCoach stopped")
 
 

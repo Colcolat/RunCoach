@@ -168,6 +168,40 @@ async function refreshProfile() {
   ].some(Boolean);
 
   el("profile").dataset.known = known ? "true" : "false";
+  renderTelegram(data);
+}
+
+/**
+ * Reminders are the one thing a closed tab cannot do, which is the entire
+ * reason for linking a chat at all. The link is a deep link: Telegram hands
+ * whatever follows `start=` to the bot, so the session id travels with the tap
+ * and the runner never types a code.
+ */
+function renderTelegram(data) {
+  const box = el("telegram");
+
+  // No bot configured on this deployment: offer nothing rather than a dead link.
+  if (!data.telegram_url) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+
+  const link = el("telegram-link");
+  const note = el("telegram-note");
+
+  if (data.telegram_linked) {
+    link.hidden = true;
+    note.textContent = data.reminder_at
+      ? `Telegram conectado. Te aviso a las ${data.reminder_at}.`
+      : "Telegram conectado. Dime a qué hora quieres que te avise.";
+    return;
+  }
+
+  link.hidden = false;
+  link.href = data.telegram_url;
+  note.textContent =
+    "Para que te avise cuando toque entrenar, aunque tengas esto cerrado.";
 }
 
 // --- playback ----------------------------------------------------------------

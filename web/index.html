@@ -44,6 +44,19 @@
           <dd class="countdown" data-countdown hidden></dd>
         </div>
       </dl>
+
+      <!--
+        Hidden until the server says a bot is configured, so a deployment
+        without one shows nothing rather than a dead t.me link.
+      -->
+      <div class="telegram" id="telegram" hidden>
+        <a class="telegram-link" id="telegram-link" href="#" rel="noopener">
+          Conectar Telegram
+        </a>
+        <p class="telegram-note" id="telegram-note">
+          Para que te avise cuando toque entrenar, aunque tengas esto cerrado.
+        </p>
+      </div>
     </aside>
 
     <main class="stage">

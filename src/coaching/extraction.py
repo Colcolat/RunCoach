@@ -53,9 +53,21 @@ EXTRACTION_SCHEMA = {
         "experience_level": {"type": "STRING", "enum": list(LEVELS), "nullable": True},
         "weekly_km": {"type": "NUMBER", "nullable": True},
         "race_date": {"type": "STRING", "nullable": True},
+        # F6. Not a profile column: it becomes a row in `reminders`, so the
+        # agent takes it out of the result before writing the rest.
+        "reminder_time": {"type": "STRING", "nullable": True},
     },
-    "required": ["goal", "experience_level", "weekly_km", "race_date"],
+    "required": [
+        "goal",
+        "experience_level",
+        "weekly_km",
+        "race_date",
+        "reminder_time",
+    ],
 }
+
+# The key `clean` may return that does not belong on the user row.
+REMINDER_FIELD = "reminder_time"
 
 
 def _strip_accents(text: str) -> str:
@@ -149,7 +161,12 @@ ocurra contando desde hoy. Si no hay fecha, null.
 
 goal solo si nombran la distancia objetivo. Un medio maratón son 21K.
 
-experience_level solo si describen su experiencia corriendo."""
+experience_level solo si describen su experiencia corriendo.
+
+reminder_time en formato HH:MM de 24 horas, y SOLO si piden explícitamente que se les avise o \
+recuerde a una hora. "Suelo correr a las siete" es cuándo entrena, no una petición de aviso, y ahí \
+va null. "Recuérdame a las siete" o "avísame por la mañana a las 6:30" sí lo son. Si dicen una hora \
+sin precisar mañana o tarde, interpreta la más razonable para salir a correr."""
 
 
 # --- validation --------------------------------------------------------------
@@ -203,6 +220,25 @@ def _clean_race_date(value, today: date) -> str | None:
     return parsed.isoformat()
 
 
+def _clean_reminder_time(value) -> str | None:
+    """Normalise to "HH:MM", refusing anything that is not a real clock time.
+
+    Stored as text and later read back by the sweep, so a value like "25:00"
+    would sit in the column silently doing nothing. Better to drop it and let
+    the runner ask again.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        hour, minute = value.strip().split(":")
+        hour, minute = int(hour), int(minute)
+    except (ValueError, AttributeError):
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return f"{hour:02d}:{minute:02d}"
+
+
 def clean(raw: dict | None, today: date) -> dict:
     """Keep the fields that survive validation; drop the rest silently.
 
@@ -218,5 +254,6 @@ def clean(raw: dict | None, today: date) -> dict:
         "experience_level": _clean_level(raw.get("experience_level")),
         "weekly_km": _clean_weekly_km(raw.get("weekly_km")),
         "race_date": _clean_race_date(raw.get("race_date"), today),
+        REMINDER_FIELD: _clean_reminder_time(raw.get(REMINDER_FIELD)),
     }
     return {key: value for key, value in candidates.items() if value is not None}

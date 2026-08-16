@@ -15,8 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from src.agents.coach_agent import CoachAgent
+from src.services.telegram_service import TelegramService
 from src.coaching.prompts import weeks_until
-from src.dependencies import get_coach
+from src.dependencies import get_coach, get_telegram
 from src.services import db_service
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -62,6 +63,13 @@ class ProfileResponse(BaseModel):
     # Computed here rather than in the browser, so the arithmetic the coach
     # reasons with and the number the runner reads cannot drift apart.
     weeks_to_race: int | None = None
+
+    # F6. Travels with the profile so the panel needs one request, not two.
+    # `telegram_url` is null when no bot username is configured, and the client
+    # hides the button rather than offering a broken t.me address.
+    telegram_linked: bool = False
+    telegram_url: str | None = None
+    reminder_at: str | None = None
 
 
 @router.get("/welcome", response_model=WelcomeResponse)
@@ -114,7 +122,9 @@ def history(session_id: str) -> HistoryResponse:
 
 
 @router.get("/profile/{session_id}", response_model=ProfileResponse)
-def profile(session_id: str) -> ProfileResponse:
+def profile(
+    session_id: str, telegram: TelegramService = Depends(get_telegram)
+) -> ProfileResponse:
     """What F4 has learned about this runner, for the panel to show.
 
     Read-only on purpose. There is no PUT and no form behind this: the runner
@@ -131,4 +141,7 @@ def profile(session_id: str) -> ProfileResponse:
         weekly_km=user["weekly_km"],
         race_date=user["race_date"],
         weeks_to_race=weeks_until(user["race_date"], datetime.now(timezone.utc).date()),
+        telegram_linked=user["telegram_id"] is not None,
+        telegram_url=telegram.deep_link(session_id),
+        reminder_at=db_service.daily_reminder_time(user["id"]),
     )
