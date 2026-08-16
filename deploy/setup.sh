@@ -73,6 +73,10 @@ fi
 # deploy cannot take every runner's history with it.
 mkdir -p "$APP_DIR/data"
 
+# Conversations are private. A review found the file world-readable, which meant
+# any account on the box could read every runner's history.
+chmod 750 "$APP_DIR/data"
+
 say "dependencias"
 [[ -d "$APP_DIR/venv" ]] || python3 -m venv "$APP_DIR/venv"
 # Same guarantee as the README: if this succeeds, nothing needed compiling.
@@ -80,6 +84,10 @@ say "dependencias"
 "$APP_DIR/venv/bin/pip" install --quiet --only-binary=:all: -r "$APP_DIR/requirements.txt"
 
 chown -R runcoach:runcoach "$APP_DIR"
+# Re-applied after the chown, and again on every run: an existing database
+# created before this fix keeps its old mode otherwise.
+chmod 750 "$APP_DIR/data"
+[[ -f "$APP_DIR/data/runcoach.db" ]] && chmod 640 "$APP_DIR/data/runcoach.db"
 
 say "configuracion"
 mkdir -p "$ENV_DIR"
@@ -88,6 +96,11 @@ if [[ ! -f "$ENV_DIR/runcoach.env" ]]; then
 DATABASE_URL=sqlite:///$APP_DIR/data/runcoach.db
 REMINDER_TIMEZONE=America/Mexico_City
 LOG_LEVEL=INFO
+
+# Who may open the voice socket. WebSockets are exempt from the same-origin
+# policy, so leaving this empty lets any page anywhere spend the Live API
+# budget. Empty is right on a laptop and wrong on a server.
+ALLOWED_ORIGINS=https://$DOMAIN
 
 # Rellenar a mano. Sin GOOGLE_API_KEY la aplicacion arranca igual y responde
 # en modo degradado; sin TELEGRAM_BOT_TOKEN no hay recordatorios.

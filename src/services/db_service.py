@@ -68,6 +68,26 @@ def _resolve(session: Session, web_session_id: str | None, telegram_id: int | No
     return user
 
 
+def find_user(
+    web_session_id: str | None = None, telegram_id: int | None = None
+) -> dict | None:
+    """Look a runner up without creating one.
+
+    The read paths need this. get_or_create_user on a GET turned every request
+    into a write, so anyone could fill the disk by asking about session ids that
+    never existed.
+    """
+    with session_scope() as session:
+        if web_session_id:
+            stmt = select(User).where(User.web_session_id == web_session_id)
+        elif telegram_id is not None:
+            stmt = select(User).where(User.telegram_id == telegram_id)
+        else:
+            return None
+        user = session.scalars(stmt).first()
+        return _user_to_dict(user) if user is not None else None
+
+
 def get_or_create_user(
     web_session_id: str | None = None,
     telegram_id: int | None = None,

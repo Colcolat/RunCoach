@@ -84,6 +84,23 @@ class Settings(BaseSettings):
     inactivity_after_days: int = 3
     inactivity_cooldown_days: int = 7
 
+    # Origins allowed to open the voice socket. WebSockets are not covered by
+    # the same-origin policy, so without this any web page anywhere can open a
+    # session against this server and spend the Live API budget. Empty means
+    # allow everything, which is what a laptop needs and what a deployment
+    # should never have.
+    allowed_origins: str = ""
+
+    # A ceiling on turns per session per minute. The free tier gives 500 text
+    # requests a day and a turn can cost two, so a loop of requests empties the
+    # quota in minutes and leaves the next visitor with a coach that cannot
+    # answer. This protects the demo from being trivially switched off.
+    max_turns_per_minute: int = 12
+
+    @property
+    def origins(self) -> tuple[str, ...]:
+        return tuple(o.strip() for o in self.allowed_origins.split(",") if o.strip())
+
     @property
     def telegram_enabled(self) -> bool:
         return bool(self.telegram_bot_token.strip())

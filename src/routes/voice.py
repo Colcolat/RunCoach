@@ -166,6 +166,17 @@ async def voice(
     coach: CoachAgent = Depends(get_coach),
     settings: Settings = Depends(get_settings),
 ) -> None:
+    # WebSockets are exempt from the same-origin policy, so the browser will
+    # happily let any page open one against us. Checked before accepting, so a
+    # rejected connection never reaches the Live API and never costs a token.
+    allowed = settings.origins
+    if allowed:
+        origin = websocket.headers.get("origin")
+        if origin not in allowed:
+            logger.warning("Voice socket refused for origin %r", origin)
+            await websocket.close(code=1008)
+            return
+
     await websocket.accept()
 
     if not live.enabled:

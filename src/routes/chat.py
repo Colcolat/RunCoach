@@ -8,6 +8,7 @@ limitation in the README.
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -17,15 +18,46 @@ from pydantic import BaseModel, Field
 from src.agents.coach_agent import CoachAgent
 from src.services.telegram_service import TelegramService
 from src.coaching.prompts import weeks_until
-from src.dependencies import get_coach, get_telegram
+from src.dependencies import get_coach, get_limiter, get_telegram
+from src.ratelimit import TurnLimiter
 from src.services import db_service
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
+# The browser mints 32 hex characters, but the shape is not what matters here:
+# the bound is. These endpoints used to accept a string of any length and create
+# a row for it, so two unauthenticated GETs were unbounded writes. A probe with
+# a 5000-character id was accepted and stored.
+#
+# Deliberately looser than the browser's own format so that a session id remains
+# something a caller can choose, which is what makes the API usable from a
+# script or a test without a special case.
+SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _known_session(session_id: str) -> dict | None:
+    """The runner behind this id, or None. Never creates one.
+
+    The important half is that this cannot write. A read that creates rows lets
+    anyone fill the disk by asking about ids that never existed.
+
+    Returning None for both "malformed" and "never seen" is deliberate: the
+    caller renders an empty profile either way, and distinguishing them would
+    turn this into an oracle for which session ids exist.
+    """
+    if not SESSION_ID.match(session_id):
+        return None
+    return db_service.find_user(web_session_id=session_id)
+
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
-    session_id: str | None = Field(default=None, max_length=64)
+    # Same bound and charset as the read paths. The write path always cost a
+    # model call, so it was never the cheap way to make rows, but an id is a
+    # primary key in everything but name and should not accept arbitrary bytes.
+    session_id: str | None = Field(
+        default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
     username: str | None = Field(default=None, max_length=100)
 
 
@@ -86,9 +118,21 @@ def welcome(
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
-    payload: ChatRequest, coach: CoachAgent = Depends(get_coach)
+    payload: ChatRequest,
+    coach: CoachAgent = Depends(get_coach),
+    limiter: TurnLimiter = Depends(get_limiter),
 ) -> ChatResponse:
     session_id = payload.session_id or uuid.uuid4().hex
+
+    # A turn can cost two requests from a 500-a-day budget. Refusing here is
+    # what stops one caller emptying it and leaving the next visitor with a
+    # coach that cannot answer. 429 rather than a degraded reply, because this
+    # is our limit and not the model's, and the caller can act on it.
+    if not limiter.allow(session_id):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="demasiadas preguntas seguidas; espera unos segundos",
+        )
 
     try:
         reply = await coach.converse(
@@ -112,8 +156,15 @@ async def chat(
 
 @router.get("/history/{session_id}", response_model=HistoryResponse)
 def history(session_id: str) -> HistoryResponse:
-    """Replay a conversation, so a reload does not look like amnesia."""
-    user = db_service.get_or_create_user(web_session_id=session_id)
+    """Replay a conversation, so a reload does not look like amnesia.
+
+    A session nobody has spoken to has no history, and asking about it must not
+    bring one into existence.
+    """
+    user = _known_session(session_id)
+    if user is None:
+        return HistoryResponse(session_id=session_id, messages=[])
+
     conversation_id = db_service.get_or_create_conversation(user["id"])
     return HistoryResponse(
         session_id=session_id,
@@ -132,7 +183,14 @@ def profile(
     editable profile would be a second source of truth competing with the
     conversation, and the conversation has to win.
     """
-    user = db_service.get_or_create_user(web_session_id=session_id)
+    user = _known_session(session_id)
+    if user is None:
+        # A first visit is legitimately empty, and so is a made-up id. Both get
+        # the same empty panel, and neither leaves a row behind.
+        return ProfileResponse(
+            session_id=session_id, telegram_url=telegram.deep_link(session_id)
+        )
+
     return ProfileResponse(
         session_id=session_id,
         username=user["username"],

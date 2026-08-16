@@ -91,6 +91,10 @@ def _clear_caches() -> None:
     dependencies.get_gemini.cache_clear()
     dependencies.get_coach.cache_clear()
     dependencies.get_telegram.cache_clear()
+    # The rate limiter counts turns per session and is cached for the process,
+    # so without this a test inherits whatever the previous one spent and fails
+    # with a 429 that has nothing to do with what it was testing.
+    dependencies.get_limiter.cache_clear()
 
 
 class StubTelegram:

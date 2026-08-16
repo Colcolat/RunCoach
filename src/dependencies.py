@@ -11,6 +11,8 @@ from functools import lru_cache
 
 from src.agents.coach_agent import CoachAgent
 from src.services.gemini_service import GeminiService
+from src.config import get_settings
+from src.ratelimit import TurnLimiter
 from src.services.live_service import LiveVoiceService
 from src.services.telegram_service import TelegramService
 
@@ -33,3 +35,8 @@ def get_coach() -> CoachAgent:
 @lru_cache
 def get_telegram() -> TelegramService:
     return TelegramService()
+
+
+@lru_cache
+def get_limiter() -> TurnLimiter:
+    return TurnLimiter(get_settings().max_turns_per_minute)

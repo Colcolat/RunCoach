@@ -28,6 +28,14 @@ async def lifespan(app: FastAPI):
         format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
     )
 
+    # httpx logs every request URL at INFO, and the Telegram bot token lives in
+    # the path of every one of them. Polling means one request every few
+    # seconds, so the token was written to the journal 536 times in a single
+    # afternoon - readable by anyone in the adm group, and carried into any log
+    # shipping or backup. Warnings and errors still come through.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     create_schema()
 
     if not check_connection():
