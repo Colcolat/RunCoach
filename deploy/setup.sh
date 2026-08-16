@@ -56,6 +56,11 @@ say "usuario de servicio"
 id runcoach &>/dev/null || useradd --system --shell /usr/sbin/nologin --home "$APP_DIR" runcoach
 
 say "codigo"
+# The first run hands the checkout to the service user, and git then refuses to
+# touch it as root with "detected dubious ownership". That turns the second run
+# into a failure, which defeats the point of a script written to be re-run.
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+
 if [[ -d "$APP_DIR/.git" ]]; then
     git -C "$APP_DIR" fetch --quiet origin
     git -C "$APP_DIR" reset --hard --quiet "origin/$BRANCH"
