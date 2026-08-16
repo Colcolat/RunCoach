@@ -175,9 +175,13 @@ goal solo si nombran la distancia objetivo. Un medio maratón son 21K.
 experience_level solo si describen su experiencia corriendo.
 
 reminder_time en formato HH:MM de 24 horas, y SOLO si piden explícitamente que se les avise o \
-recuerde a una hora. "Suelo correr a las siete" es cuándo entrena, no una petición de aviso, y ahí \
-va null. "Recuérdame a las siete" o "avísame por la mañana a las 6:30" sí lo son. Si dicen una hora \
-sin precisar mañana o tarde, interpreta la más razonable para salir a correr."""
+recuerde. "Suelo correr a las siete" es cuándo entrena, no una petición de aviso, y ahí va null. \
+"Recuérdame a las siete" o "avísame por la mañana a las 6:30" sí lo son. Si dicen una hora sin \
+precisar mañana o tarde, interpreta la más razonable para salir a correr.
+
+Acepta también horas relativas: "en dos minutos", "en media hora", "en una hora". Para esas, suma \
+el tiempo a la hora actual que aparece arriba y devuelve el resultado en HH:MM. Sin hora actual \
+arriba, una petición relativa va en null."""
 
 
 # --- validation --------------------------------------------------------------
