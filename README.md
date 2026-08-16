@@ -9,6 +9,34 @@ Prepara corredores de cualquier nivel para 5K, 10K, 21K y maratón.
 Ejercicio técnico para la vacante de Practicante Dual en Adivor (Aldan
 Ingeniería).
 
+## **[Probarlo aquí](https://runcoachjj.duckdns.org)**
+
+No hace falta instalar nada ni crear cuenta. Pulsa **Hablar**, permite el
+micrófono y dile qué quieres preparar.
+
+Si no puedes hablar en este momento, el mismo coach responde por escrito en el
+campo de abajo: es la misma conversación y el mismo historial.
+
+---
+
+## Qué hace, en tres capturas
+
+**Se le habla, y el perfil se llena solo.** Nadie rellena un formulario: el
+objetivo y el nivel salen de lo que el corredor dice en voz alta.
+
+![La aplicación en un móvil](docs/fotos/movil.jpg)
+
+**La conversación es la misma en los dos canales.** Estas preguntas se hicieron
+en Telegram; el plan y el objetivo se habían acordado antes en el navegador. Un
+corredor, un perfil, dos canales.
+
+![La misma conversación continuada en Telegram](docs/fotos/telegram.jpg)
+
+**Y busca al corredor cuando la pestaña está cerrada**, con su plan dentro y no
+con un texto genérico. Es lo único que una página web no puede hacer sola.
+
+![Un recordatorio llegando al teléfono](docs/fotos/recordatorio.jpeg)
+
 ---
 
 ## La idea
@@ -54,19 +82,24 @@ suite en verde y se comitea sólo después de haberse ejecutado.
 | F3 | Memoria entre sesiones | Hecho |
 | F4 | Perfil del corredor extraído de la conversación | Hecho |
 | F5 | Interfaz web | Hecho |
-| F6 | Recordatorios proactivos por Telegram | Siguiente |
-| F7 | Despliegue | Planeado |
-| F8 | Entrega | Planeado |
+| F6 | Recordatorios proactivos por Telegram | Hecho |
+| F7 | Despliegue | Hecho |
+| F8 | Entrega | En curso |
 
-Hoy corre: se le puede **hablar** y contesta con voz, en cualquier navegador con
-micrófono. También responde por escrito. **Recuerda**: la conversación persiste
-entre recargas, y hablar y escribir alimentan un mismo historial, así que se
-puede empezar por voz y seguir por texto sin perder el hilo. **Y toma nota**: el
-objetivo, el nivel, el volumen semanal y la fecha de carrera se leen de lo que el
-corredor cuenta y quedan registrados, así que la personalización sobrevive a la
-conversación que la produjo, y se ven en un panel al lado. Lo que falta es que
-sepa buscarte cuando la pestaña está cerrada, que es F6. Este README se
-actualiza conforme cada fragmento existe, no antes.
+Todo lo anterior está desplegado y verificado en
+[runcoachjj.duckdns.org](https://runcoachjj.duckdns.org), no solo en local.
+
+Se le puede **hablar** y contesta con voz, en cualquier navegador con micrófono;
+también responde por escrito. **Recuerda** entre sesiones, y hablar y escribir
+alimentan un mismo historial, así que se puede empezar por voz y seguir por
+texto sin perder el hilo. **Toma nota** del objetivo, el nivel, el volumen
+semanal y la fecha de carrera a partir de lo que el corredor cuenta. **Y busca
+al corredor** por Telegram cuando la pestaña está cerrada.
+
+Los dos puntos extra opcionales del enunciado —memoria de conversaciones
+anteriores y recordatorios proactivos— están construidos y funcionando.
+
+Este README se actualiza conforme cada fragmento existe, no antes.
 
 Una conversación hablada real, verificada de punta a punta contra la API:
 
@@ -105,28 +138,33 @@ Preguntó en lugar de suponer. Y bajo presión sostiene las reglas:
 
 ## Arquitectura
 
-Lo que ya existe está en trazo continuo; lo planeado, con guiones.
+```
+   Navegador                          Telegram
+  voz  <==WebSocket==>              texto (polling)
+  texto <==HTTP======>                    |
+        |                                 |
+        +============ FastAPI ============+
+                         |
+        +================+================+
+        |                |                |
+   CoachAgent       /ws/voice        APScheduler
+ (devuelve la      (proxy hacia    (barrido cada
+  respuesta;        Gemini Live)    60s: que toca?)
+  quien llama                             |
+  la entrega)                             |
+        |                                 |
+        +================+================+
+                         |
+        +================+================+
+        |                |                |
+    Reglas de      Gemini texto      Persistencia
+  entrenamiento    + Gemini Live        (SQLite)
+```
 
-```
-Navegador                             Telegram (F6)
-  voz   <==WebSocket==>                 texto
-  texto <==HTTP=======>                   :
-        |                                 :
-        +============ FastAPI ............+
-                         |
-              +==========+==========+
-              |                     |
-         CoachAgent            /ws/voice
-    (devuelve la respuesta;   (proxy hacia
-     quien llama la entrega)   Gemini Live)
-              |                     |
-              +==========+==========+
-                         |
-        +================+===================+
-        |                |                   |
-    Reglas de      Gemini texto        Persistencia
-  entrenamiento    + Gemini Live          (SQLite)
-```
+Todo corre en un solo proceso, y eso es deliberado. Dos procesos harían polling
+de Telegram a la vez, cosa que Telegram responde con 409, y ejecutarían dos
+barridos de recordatorios, que son dos mensajes por un aviso. La concurrencia
+que este sistema necesita es asyncio dentro de un proceso.
 
 El navegador nunca ve la clave de API: cada trama de audio pasa por el servidor.
 
@@ -301,9 +339,10 @@ pytest --cov=src --cov-report=term-missing
 Las pruebas no tocan la red. El modelo y el bot se sustituyen por dobles, así
 que la suite es determinista y corre sin credenciales.
 
-223 pruebas sin red, 94 por ciento de cobertura. Las reglas de entrenamiento, la
+298 pruebas sin red, 88 por ciento de cobertura. Las reglas de entrenamiento, la
 extracción de perfil y la persistencia están al 100; lo que falta es el camino de
-red de los clientes.
+red de los clientes y el ciclo de vida del bot, que solo se ejercitan de verdad
+contra servicios reales.
 
 Hay además seis pruebas que **sí** llaman al modelo real, porque verifican algo
 que ninguna prueba con dobles puede: que el coach *obedezca* sus reglas, no que
@@ -336,6 +375,44 @@ fallo del modelo degrada en lugar de propagarse.
 
 ---
 
+## Despliegue
+
+Corre en una instancia EC2 `t3.micro` detrás de nginx, con certificado de Let's
+Encrypt y renovación automática. Tres archivos en [`deploy/`](deploy/) lo
+levantan desde cero:
+
+```bash
+sudo ./deploy/setup.sh mi-dominio.duckdns.org correo@ejemplo.com
+```
+
+El script está escrito para poder ejecutarse más de una vez: cada paso comprueba
+antes de actuar, así que un fallo a medias se arregla volviéndolo a lanzar en
+lugar de averiguando qué quedó hecho.
+
+Tres detalles del despliegue no son decoración:
+
+**nginx reenvía el upgrade de WebSocket y sube el tiempo de espera a una hora.**
+Un proxy que no reenvía las cabeceras `Upgrade` convierte la voz en una petición
+HTTP que falla en el handshake, y el cliente cae a texto sin que nada en los
+registros parezca un error. Y nginx cierra una conexión ociosa a los 60 segundos
+por defecto, lo que cortaría una conversación en cuanto el corredor se para a
+pensar.
+
+**El servicio reinicia siempre.** No solo sirve páginas: hace polling de Telegram
+y barre recordatorios, así que un proceso muerto a las tres de la mañana deja de
+avisar a la gente y nadie se entera.
+
+**La base vive fuera del checkout**, así que el `git reset --hard` que actualiza
+el código no se lleva por delante el historial de nadie.
+
+Hay también un [`Dockerfile`](Dockerfile) verificado, que es el camino más corto
+a cualquier otra plataforma.
+
+Los secretos llegan por `EnvironmentFile`, nunca por la línea de comandos, donde
+`ps` los mostraría a cualquiera con acceso a la máquina.
+
+---
+
 ## Recorrido por el código
 
 [`docs/recorrido/`](docs/recorrido/) explica cada fragmento archivo por archivo:
@@ -348,6 +425,8 @@ el razonamiento que un diff no muestra.
 - [F3: la memoria](docs/recorrido/f3-memoria.md)
 - [F4: el perfil](docs/recorrido/f4-perfil.md)
 - [F5: la interfaz](docs/recorrido/f5-interfaz.md)
+- [F6: los recordatorios](docs/recorrido/f6-recordatorios.md)
+- [F7: el despliegue](docs/recorrido/f7-despliegue.md)
 
 ---
 
@@ -357,8 +436,11 @@ Se documenta para que las ausencias se lean como decisiones y no como olvidos.
 
 - **WhatsApp**: exige Twilio de pago o aprobación de Business API, sin aportar
   ninguna capacidad que Telegram no dé ya.
-- **Autenticación**: el identificador de sesión no está autenticado. Es adecuado
-  para una demostración y no para producción.
+- **Autenticación**: el identificador de sesión no está autenticado, y quien
+  tenga el enlace profundo de Telegram puede atar su cuenta a esa sesión. Es
+  adecuado para una demostración y no para producción.
+- **Zona horaria única**: los recordatorios se leen en `America/Mexico_City`
+  para todos. El navegador conoce la suya y pedírsela es un fragmento más.
 - **PostgreSQL**: SQLite alcanza a esta escala. La ruta de migración queda
   documentada en lugar de ejecutada.
 - **Importación desde Strava**: atractiva, pero OAuth más límites de tasa no

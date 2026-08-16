@@ -14,6 +14,8 @@ es el razonamiento detrás del código, que es justo lo que un diff no muestra.
 | F3 | [La memoria](f3-memoria.md) | Modelos, persistencia, historial unificado, reglas verificadas |
 | F4 | [El perfil](f4-perfil.md) | Extracción estructurada, compuerta de cuota, validación, límites por modelo |
 | F5 | [La interfaz](f5-interfaz.md) | Diseño adaptado, estados de voz, panel de perfil, layout responsive |
+| F6 | [Los recordatorios](f6-recordatorios.md) | Filas en vez de jobs, enlace profundo, ventana de gracia, enfriamiento |
+| F7 | [El despliegue](f7-despliegue.md) | EC2, nginx con WebSocket, TLS, systemd, y por qué se abandonó Fly |
 
 ## Cómo leerlas
 
