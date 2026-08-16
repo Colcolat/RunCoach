@@ -173,3 +173,18 @@ def test_no_reminder_ever_shouts_in_markdown(builder):
 
     for forbidden in ("*", "_", "#", "- ", "1."):
         assert forbidden not in text
+
+
+# --- how numbers read --------------------------------------------------------
+
+def test_a_whole_number_of_kilometres_reads_as_a_whole_number():
+    """Seen on a real lock screen: "Vas por 3.0 kilómetros a la semana". The
+    column is a float because half-kilometres are real, but 3.0 in a push
+    notification reads like a database leaked into the product."""
+    assert "3 kilómetros" in daily_message({"goal": "Maratón", "weekly_km": 3.0})
+    assert "3.0" not in daily_message({"goal": "Maratón", "weekly_km": 3.0})
+
+
+def test_a_half_kilometre_survives():
+    """The rounding must not lie: 7.5 is a real weekly volume."""
+    assert "7.5 kilómetros" in daily_message({"goal": "10K", "weekly_km": 7.5})

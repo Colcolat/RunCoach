@@ -181,3 +181,14 @@ def test_speaking_updates_the_panel_like_typing_does():
     script = (WEB / "app.js").read_text(encoding="utf-8")
 
     assert "profile_updated" in script
+
+
+def test_hiding_something_actually_hides_it():
+    """Seen in a screenshot: the "Conectar Telegram" button sitting directly
+    above the words "Telegram conectado". The element had the hidden attribute,
+    but .telegram-link sets display:inline-block, and an author rule beats the
+    browser's own [hidden] at equal specificity."""
+    css = (WEB / "style.css").read_text(encoding="utf-8")
+
+    assert "[hidden]" in css
+    assert "display: none !important" in css

@@ -121,11 +121,23 @@ def days_silent(last_seen_at: datetime | None, now: datetime) -> int:
 
 # --- what the reminder says --------------------------------------------------
 
+def _km(value) -> str:
+    """Render kilometres the way a person says them: 3, not 3.0.
+
+    The column is a float because half-kilometres are real, but a whole number
+    that arrives as 3.0 reads like a database leaked onto a lock screen.
+    """
+    number = float(value)
+    return str(int(number)) if number == int(number) else f"{number:g}"
+
+
 def daily_message(profile: dict | None = None) -> str:
     """The morning nudge, written to be useful even with an empty profile."""
     profile = profile or {}
     goal = profile.get("goal")
     weekly = profile.get("weekly_km")
+    if weekly is not None:
+        weekly = _km(weekly)
 
     if goal and weekly:
         return (

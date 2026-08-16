@@ -59,6 +59,14 @@
   box-sizing: border-box;
 }
 
+/* The browser's own [hidden] rule sets display:none, but any class here that
+   sets display beats it: author styles win over user-agent styles at equal
+   specificity. That left the "Conectar Telegram" button sitting above the words
+   "Telegram conectado". Hiding something has to mean hiding it. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   height: 100%;
