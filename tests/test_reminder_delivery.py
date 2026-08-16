@@ -318,3 +318,58 @@ def test_the_suite_can_never_start_a_real_bot():
     from src.config import get_settings
 
     assert get_settings().telegram_enabled is False
+
+
+# --- being here counts ---------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_talking_counts_as_being_here(coach, gemini):
+    """last_seen_at has onupdate=utcnow, which only fires when the user row
+    changes - and an ordinary turn changes messages, not the runner. Without an
+    explicit touch, someone chatting every morning with a profile that is
+    already complete looks silent after three days."""
+    from src.database import session_scope
+    from src.models import User
+
+    user = db_service.get_or_create_user(web_session_id=SESSION)
+    _went_quiet(user["id"], days=10)
+
+    # A turn that reveals nothing new, so no profile write happens.
+    gemini.extraction = {}
+    await coach.converse("vale, gracias", web_session_id=SESSION)
+
+    with session_scope() as session:
+        seen = session.get(User, user["id"]).last_seen_at
+    assert (datetime.now(timezone.utc) - _aware(seen)).total_seconds() < 60
+
+
+@pytest.mark.asyncio
+async def test_an_active_runner_is_never_told_they_went_quiet(coach, gemini, telegram):
+    """The bug this pair exists for, stated as the runner would experience it."""
+    user = a_runner()
+    _went_quiet(user["id"], days=10)
+
+    gemini.extraction = {}
+    await coach.converse("¿qué hago hoy?", web_session_id=SESSION)
+
+    assert await run_due_reminders(telegram) == 0
+
+
+def test_speaking_counts_too(coach):
+    """Voice is a conversation, not a lesser channel."""
+    from src.database import session_scope
+    from src.models import User
+
+    user = db_service.get_or_create_user(web_session_id=SESSION)
+    _went_quiet(user["id"], days=10)
+
+    coach.remember_voice_turn(SESSION, "user", "corro veinte kilómetros")
+
+    with session_scope() as session:
+        seen = session.get(User, user["id"]).last_seen_at
+    assert (datetime.now(timezone.utc) - _aware(seen)).total_seconds() < 60
+
+
+def _aware(moment):
+    from zoneinfo import ZoneInfo
+    return moment if moment.tzinfo else moment.replace(tzinfo=ZoneInfo("UTC"))

@@ -148,6 +148,13 @@ class CoachAgent:
         self._db.save_message(conversation_id, "user", text, channel=channel)
         self._db.save_message(conversation_id, "assistant", reply.text, channel=channel)
 
+        # Silence is measured from here. The column has onupdate=utcnow, which
+        # only fires when the user row itself changes - and an ordinary turn
+        # changes messages, not the runner. Without this an active runner whose
+        # profile is already complete looks silent after three days and gets
+        # told "hace unos días que no hablamos" while talking every morning.
+        self._db.touch_last_seen(user["id"])
+
         return CoachReply(
             text=reply.text, degraded=reply.degraded, conversation_id=conversation_id
         )
@@ -245,6 +252,9 @@ class CoachAgent:
             user = self._db.get_or_create_user(web_session_id=web_session_id)
             conversation_id = self._db.get_or_create_conversation(user["id"])
             self._db.save_message(conversation_id, role, text, channel="voice")
+            # Speaking counts as being here, exactly as writing does.
+            if role == "user":
+                self._db.touch_last_seen(user["id"])
             return conversation_id
         except Exception:  # noqa: BLE001
             logger.exception("Could not persist a voice transcript")
