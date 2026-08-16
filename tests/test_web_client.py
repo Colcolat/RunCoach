@@ -154,3 +154,30 @@ def test_the_interface_carries_no_emoji(asset):
     source = (WEB / asset).read_text(encoding="utf-8")
 
     assert not [c for c in source if ord(c) > 0x2100], "hay emoji o pictogramas"
+
+
+def test_the_grid_columns_are_allowed_to_shrink():
+    """Found on a real phone: every heading clipped off the left edge.
+
+    A grid item defaults to min-width:auto, so a column will not shrink below
+    its contents - and the profile strip is deliberately wider than the screen,
+    scrolling inside its own overflow. With a bare 1fr the strip stretched the
+    column, the column stretched the page, and a 375px viewport got a 675px
+    document. The wide layout already used minmax(0, ...); the narrow one, the
+    one phones actually get, did not.
+
+    It survived review because the preview pane never goes below ~674px, which
+    happened to be exactly the width the content wanted.
+    """
+    css = (WEB / "style.css").read_text(encoding="utf-8")
+
+    assert "grid-template-columns: minmax(0, 1fr)" in css
+    assert "grid-template-columns: minmax(0, 52rem)" in css
+    assert "overflow-x: hidden" in css
+
+
+def test_speaking_updates_the_panel_like_typing_does():
+    """Voice used to be write-only for the profile; the panel never moved."""
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+
+    assert "profile_updated" in script

@@ -74,10 +74,21 @@ body {
   -webkit-font-smoothing: antialiased;
 
   display: grid;
-  grid-template-columns: 1fr;
+  /* minmax(0, 1fr), not 1fr. A grid item defaults to min-width: auto, so the
+     column refuses to shrink below its contents - and the profile strip is a
+     row of chips that is deliberately wider than the screen, scrolling inside
+     its own overflow. Without this the strip stretches the column, the column
+     stretches the page, and every heading gets clipped off the left edge on a
+     phone. The wide layout already had it; this one did not. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "topbar" "profile" "stage";
   grid-template-rows: auto auto 1fr;
   min-height: 100dvh;
+
+  /* Nothing here is ever meant to scroll sideways. If something does, it is a
+     bug, and this makes it visible as clipping rather than as a page that
+     drifts. */
+  overflow-x: hidden;
 }
 
 .sr-only {
@@ -118,6 +129,7 @@ body {
 .profile {
   grid-area: profile;
   padding: 0 var(--sp-lg) var(--sp-md);
+  min-width: 0; /* same reason as the column: let the chip strip scroll, not stretch */
 }
 
 .profile-title,
@@ -225,6 +237,7 @@ body {
   gap: var(--sp-md);
   padding: 0 var(--sp-lg) var(--sp-lg);
   min-height: 0; /* lets .log scroll instead of stretching the page */
+  min-width: 0;  /* and lets a long unbroken word wrap instead of widening it */
 }
 
 /* --- the voice control ----------------------------------------------------- */
@@ -658,7 +671,7 @@ body {
   }
   .telegram-note {
     margin: 0;
-    flex: 1;
-    min-width: 12rem;
+    flex: 1 1 12rem;
+    min-width: 0;
   }
 }

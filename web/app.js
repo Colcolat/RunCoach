@@ -292,7 +292,10 @@ async function startVoice() {
         break;
       case "turn_complete":
         finishTurn();
-        // A spoken turn can carry profile data too, and it was just persisted.
+        break;
+      case "profile_updated":
+        // The server read something new out of what was just said. Speaking a
+        // goal should fill the panel exactly as typing it does.
         refreshProfile();
         break;
       case "fallback":

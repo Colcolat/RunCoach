@@ -115,17 +115,47 @@ async def _pump_model(
 
         if content.turn_complete:
             if session_id:
-                _persist_turn(coach, session_id, spoken)
+                said = _persist_turn(coach, session_id, spoken)
+                # Reading the profile is a side effect of the turn, so it runs
+                # detached: awaiting it here would hold up the audio pump, and
+                # this is a live conversation where that is audible.
+                if said:
+                    asyncio.create_task(
+                        _read_profile_from_speech(websocket, coach, session_id, said)
+                    )
             spoken = {"user": [], "coach": []}
             await websocket.send_json({"type": "turn_complete"})
 
 
-def _persist_turn(coach: CoachAgent, session_id: str, spoken: dict) -> None:
-    """Write a completed spoken exchange into the same history as the text chat."""
+def _persist_turn(coach: CoachAgent, session_id: str, spoken: dict) -> str:
+    """Write a completed spoken exchange into the same history as the text chat.
+
+    Returns what the runner said, which is the half worth reading a profile out
+    of: the coach's own words are not facts about the runner.
+    """
+    said = ""
     for role, key in (("user", "user"), ("assistant", "coach")):
         text = "".join(spoken[key]).strip()
         if text:
             coach.remember_voice_turn(session_id, role, text)
+            if role == "user":
+                said = text
+    return said
+
+
+async def _read_profile_from_speech(
+    websocket: WebSocket, coach: CoachAgent, session_id: str, said: str
+) -> None:
+    """Learn from a spoken turn, and tell the browser if anything changed.
+
+    The panel is what makes this visible: a runner who says their goal out loud
+    should watch it appear, exactly as it does when they type it.
+    """
+    try:
+        if await coach.read_spoken_profile(session_id, said):
+            await websocket.send_json({"type": "profile_updated"})
+    except Exception:  # noqa: BLE001 - a side effect must never end the call
+        logger.exception("Reading a profile from speech failed")
 
 
 @router.websocket("/ws/voice")
@@ -145,8 +175,15 @@ async def voice(
 
     budget = live.new_budget()
 
+    # The spoken coach gets the same briefing as the written one. Opening the
+    # session with an empty profile was a real defect found in use: a runner who
+    # said their goal and volume out loud was asked for them again a turn later,
+    # because nothing the voice path learned ever reached the prompt, and
+    # nothing the text path had learned reached it either.
+    profile = coach.profile_for(session_id)
+
     try:
-        async with live.connect(build_system_prompt({})) as session:
+        async with live.connect(build_system_prompt(profile)) as session:
             await websocket.send_json(
                 {
                     "type": "ready",

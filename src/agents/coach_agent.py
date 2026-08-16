@@ -186,6 +186,48 @@ class CoachAgent:
 
         return clean(raw, today)
 
+    def profile_for(self, web_session_id: str | None) -> dict:
+        """What is known about this runner, for briefing a spoken session.
+
+        Returns an empty profile rather than raising: a database that cannot be
+        read should cost the coach its memory, not cost the runner their call.
+        """
+        if not web_session_id:
+            return {}
+        try:
+            return self._db.get_or_create_user(web_session_id=web_session_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not load a profile for the voice session")
+            return {}
+
+    async def read_spoken_profile(self, web_session_id: str, said: str) -> dict:
+        """Read profile facts out of something the runner said out loud.
+
+        Voice used to be write-only for the profile: transcripts were stored,
+        but nothing was ever learned from them, so a runner who only ever spoke
+        kept an empty profile and got asked the same questions every session.
+
+        Runs after the turn is already persisted and never raises, for the same
+        reason as the text path: this improves the next conversation, and the
+        current one has already been answered.
+        """
+        updates = await self._read_profile(said, history=None)
+        if not updates:
+            return {}
+
+        try:
+            user = self._db.get_or_create_user(web_session_id=web_session_id)
+            at_time = updates.pop(REMINDER_FIELD, None)
+            if at_time:
+                self._db.set_daily_reminder(user["id"], at_time)
+            if updates:
+                self._db.update_profile(user["id"], **updates)
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not save a profile read from speech")
+            return {}
+
+        return updates
+
     def remember_voice_turn(
         self, web_session_id: str, role: str, content: str
     ) -> int | None:
