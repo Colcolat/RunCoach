@@ -1,0 +1,26 @@
+# The image needs src/, web/ and requirements.txt. Everything else is either a
+# secret, a local artefact, or weight nobody deploys.
+.git/
+.github/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Never. The token and the API key reach the container as platform secrets.
+.env
+.env.local
+
+# Local databases: the deployed one lives on a mounted volume.
+*.db
+*.sqlite3
+*.log
+
+docs/
+tests/
+graphify-out/
+.vscode/
+.idea/
