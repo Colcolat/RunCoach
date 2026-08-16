@@ -1,0 +1,50 @@
+# Fly.io deployment.
+#
+# The two settings that matter most here are not about performance. This
+# application polls Telegram and runs a reminder sweep, and both of those break
+# in ways that are hard to see if the platform does what it normally does:
+# stopping idle machines, and running more than one.
+
+app = "runcoach-adivor"
+primary_region = "qro"          # Queretaro; closest region to the reviewer
+
+[build]
+
+[env]
+  # The volume, not the image layer. A deploy replaces the image; the database
+  # has to survive that.
+  DATABASE_URL = "sqlite:////data/runcoach.db"
+  REMINDER_TIMEZONE = "America/Mexico_City"
+
+[http_service]
+  internal_port = 8080
+  # The microphone needs a secure context. Without this the headline feature of
+  # the product does not work at all in a browser.
+  force_https = true
+
+  # Never sleep. A stopped machine is not polling Telegram and not running the
+  # sweep, so reminders silently stop and the bot goes deaf. It also means the
+  # reviewer never meets a cold start.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # Exactly one. Two machines poll Telegram concurrently, which Telegram
+  # answers with 409 Conflict, and run two sweeps, which is two messages for
+  # one reminder.
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[mounts]
+  source = "runcoach_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
