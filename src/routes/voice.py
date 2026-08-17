@@ -60,6 +60,13 @@ async def _pump_microphone(
         audio = message.get("bytes")
         if audio:
             budget.charge(len(audio))
+            if budget.should_warn():
+                # Documented in this module's header since F2 and never
+                # actually sent, so the voice simply stopped without notice.
+                await _safe_json(
+                    websocket,
+                    {"type": "budget", "remaining": round(budget.remaining)},
+                )
             if budget.exhausted:
                 # Stop before sending, so the cap is a real ceiling rather than
                 # something noticed one chunk too late.

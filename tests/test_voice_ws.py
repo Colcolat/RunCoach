@@ -202,10 +202,42 @@ def test_exhausting_the_budget_falls_back_to_text(voice_client):
     with client.websocket_connect("/ws/voice") as ws:
         ws.receive_json()
         ws.send_bytes(b"\x00" * 32000)  # a full second, over the half-second cap
+        mensajes = [ws.receive_json(), ws.receive_json()]
+
+    tipos = [m["type"] for m in mensajes]
+    assert tipos == ["budget", "fallback"]
+    assert mensajes[1]["reason"] == "budget_exhausted"
+
+
+def test_the_runner_is_warned_before_the_voice_stops(voice_client):
+    """This module's header promised a budget message since F2 and nothing ever
+    sent one, so the microphone simply stopped answering. Being cut off without
+    notice is indistinguishable from the application breaking."""
+    session = FakeSession()
+    client, _ = voice_client(session, max_seconds=10.0)
+
+    with client.websocket_connect("/ws/voice") as ws:
+        ws.receive_json()
+        ws.send_bytes(b"\x00" * 256000)  # eight seconds: past the warning, under the cap
         message = ws.receive_json()
 
-    assert message["type"] == "fallback"
-    assert message["reason"] == "budget_exhausted"
+    assert message["type"] == "budget"
+    assert message["remaining"] == 2
+
+
+def test_the_warning_is_said_once_and_not_on_every_frame(voice_client):
+    """It is asked on every audio frame, dozens a second. A warning repeated at
+    that rate is not a warning."""
+    session = FakeSession()
+    client, _ = voice_client(session, max_seconds=10.0)
+
+    with client.websocket_connect("/ws/voice") as ws:
+        ws.receive_json()
+        ws.send_bytes(b"\x00" * 256000)
+        assert ws.receive_json()["type"] == "budget"
+        ws.send_bytes(b"\x00" * 16000)  # still under the cap, already warned
+        ws.send_bytes(b"\x00" * 320000)  # now over it
+        assert ws.receive_json()["type"] == "fallback"
 
 
 def test_audio_over_the_cap_is_not_forwarded_to_the_model(voice_client):

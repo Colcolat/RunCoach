@@ -293,6 +293,16 @@ async function startVoice() {
       case "turn_complete":
         finishTurn();
         break;
+      case "budget":
+        // The voice budget is nearly spent. Said out loud rather than left to
+        // surprise the runner when the microphone stops answering.
+        addBubble(
+          "coach",
+          `Nos queda alrededor de ${Math.max(1, Math.round(message.remaining / 60))} ` +
+            "minuto(s) de voz en esta sesión. Después seguimos por escrito, sin perder el hilo.",
+          { notice: true }
+        );
+        break;
       case "profile_updated":
         // The server read something new out of what was just said. Speaking a
         // goal should fill the panel exactly as typing it does.

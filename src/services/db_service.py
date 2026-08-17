@@ -293,14 +293,3 @@ def touch_last_seen(user_id: int) -> None:
         user = session.get(User, user_id)
         if user is not None:
             user.last_seen_at = utcnow()
-
-
-def clear_conversation(conversation_id: int) -> int:
-    """Delete every message in a conversation. Returns how many were removed."""
-    with session_scope() as session:
-        messages = session.scalars(
-            select(Message).where(Message.conversation_id == conversation_id)
-        ).all()
-        for message in messages:
-            session.delete(message)
-        return len(messages)

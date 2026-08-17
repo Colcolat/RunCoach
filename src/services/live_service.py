@@ -54,9 +54,15 @@ class VoiceBudget:
     session falls back to text rather than failing.
     """
 
+    # Warn with a quarter of the budget left. Enough to finish a thought and
+    # decide to carry on in writing, rather than being cut off mid-sentence,
+    # which is indistinguishable from the application breaking.
+    WARN_AT = 0.75
+
     def __init__(self, max_seconds: float) -> None:
         self.max_seconds = max_seconds
         self.spent_seconds = 0.0
+        self._warned = False
 
     @property
     def remaining(self) -> float:
@@ -68,6 +74,19 @@ class VoiceBudget:
 
     def charge(self, byte_count: int) -> None:
         self.spent_seconds += audio_seconds(byte_count)
+
+    def should_warn(self) -> bool:
+        """True exactly once, when the budget crosses its warning line.
+
+        Once, because this is asked on every audio frame - dozens a second -
+        and a warning repeated at that rate is not a warning.
+        """
+        if self._warned or self.max_seconds <= 0:
+            return False
+        if self.spent_seconds < self.max_seconds * self.WARN_AT:
+            return False
+        self._warned = True
+        return True
 
 
 class LiveVoiceService:

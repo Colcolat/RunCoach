@@ -175,3 +175,28 @@ def _count_users() -> int:
 
     with session_scope() as session:
         return session.query(User).count()
+
+
+def test_the_limiter_prunes_itself_without_being_asked():
+    """forget_idle existed and nothing called it, which is the same defect this
+    project already shipped once with touch_last_seen: written, tested, dead.
+    A scheduled job would have tied it to the reminder sweep, which does not run
+    when Telegram is unconfigured."""
+    limiter = TurnLimiter(5)
+
+    for i in range(TurnLimiter.PRUNE_ABOVE + 50):
+        limiter.allow(f"sesion-{i}", now=100.0 + i)
+
+    # Everything older than a minute is gone; the recent tail survives.
+    assert len(limiter._seen) <= 200
+
+
+def test_pruning_never_forgets_someone_still_talking():
+    limiter = TurnLimiter(2)
+    for i in range(TurnLimiter.PRUNE_ABOVE + 10):
+        limiter.allow(f"otro-{i}", now=100.0)
+
+    limiter.allow("activo", now=1000.0)
+
+    assert limiter.allow("activo", now=1000.0) is True
+    assert limiter.allow("activo", now=1000.0) is False, "el limite dejo de contar"

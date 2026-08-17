@@ -113,15 +113,6 @@ def test_an_unknown_role_is_rejected():
         db_service.save_message(_conversation(), "system", "no permitido")
 
 
-def test_clearing_a_conversation_removes_every_message():
-    conversation_id = _conversation()
-    db_service.save_message(conversation_id, "user", "hola")
-    db_service.save_message(conversation_id, "assistant", "hola")
-
-    assert db_service.clear_conversation(conversation_id) == 2
-    assert db_service.get_history(conversation_id) == []
-
-
 # --- profile -----------------------------------------------------------------
 
 

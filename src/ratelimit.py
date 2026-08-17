@@ -26,6 +26,13 @@ from collections import deque
 class TurnLimiter:
     """Sliding one-minute window per key."""
 
+    # Prune once the table is bigger than any real minute of traffic could
+    # justify. Lazily rather than on a timer: a scheduled job would tie this to
+    # the reminder sweep, which does not run at all when Telegram is
+    # unconfigured, and leak quietly on exactly the deployments least likely to
+    # be watched.
+    PRUNE_ABOVE = 1024
+
     def __init__(self, max_per_minute: int) -> None:
         self._max = max_per_minute
         self._seen: dict[str, deque[float]] = {}
@@ -36,6 +43,12 @@ class TurnLimiter:
             return True
 
         now = time.monotonic() if now is None else now
+
+        # One entry per session id ever seen is the same unbounded growth this
+        # class exists to prevent elsewhere.
+        if len(self._seen) > self.PRUNE_ABOVE:
+            self.forget_idle(now)
+
         window = self._seen.setdefault(key, deque())
 
         cutoff = now - 60.0
