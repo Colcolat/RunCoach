@@ -225,6 +225,49 @@ def set_daily_reminder(user_id: int, at_time: str) -> int:
         return reminder.id
 
 
+def set_plan_reminder(user_id: int, at_time: str, *, eve: bool = False) -> int:
+    """Set, or move, this runner's training-day reminder.
+
+    One of each kind, and setting one clears the other: "recuérdame la víspera"
+    after "recuérdame por la mañana" is a change of mind, not a request for two
+    messages about the same run.
+    """
+    kind = "plan_eve" if eve else "plan_today"
+    other = "plan_today" if eve else "plan_eve"
+
+    with session_scope() as session:
+        for row in session.scalars(
+            select(Reminder).where(Reminder.user_id == user_id, Reminder.kind == other)
+        ):
+            row.enabled = False
+
+        stmt = select(Reminder).where(
+            Reminder.user_id == user_id, Reminder.kind == kind
+        )
+        reminder = session.scalars(stmt).first()
+        if reminder is None:
+            reminder = Reminder(user_id=user_id, kind=kind)
+            session.add(reminder)
+        reminder.at_time = at_time
+        reminder.enabled = True
+        session.flush()
+        return reminder.id
+
+
+def plan_reminder(user_id: int) -> dict | None:
+    """This runner's training-day reminder, if they set one."""
+    with session_scope() as session:
+        stmt = select(Reminder).where(
+            Reminder.user_id == user_id,
+            Reminder.kind.in_(("plan_today", "plan_eve")),
+            Reminder.enabled.is_(True),
+        )
+        reminder = session.scalars(stmt).first()
+        if reminder is None:
+            return None
+        return {"at_time": reminder.at_time, "eve": reminder.kind == "plan_eve"}
+
+
 def ensure_inactivity_reminder(user_id: int) -> int:
     """Every runner gets one, created the first time they are seen."""
     with session_scope() as session:
@@ -263,6 +306,14 @@ def pending_reminders() -> list[dict]:
                 "telegram_id": user.telegram_id,
                 "last_seen_at": user.last_seen_at,
                 "profile": _user_to_dict(user),
+                # Only the plan kinds read this, but it is loaded here so the
+                # sweep stays a pure decision over the rows it was handed
+                # rather than reaching back into the database mid-loop.
+                "sessions": (
+                    list(user.plan.sessions)
+                    if user.plan is not None and isinstance(user.plan.sessions, list)
+                    else []
+                ),
             }
             for reminder, user in session.execute(stmt).all()
         ]

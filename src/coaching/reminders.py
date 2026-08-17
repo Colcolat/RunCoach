@@ -79,6 +79,43 @@ def daily_is_due(
     return True
 
 
+def session_on(sessions: list[dict], target: date) -> dict | None:
+    """The session scheduled for a given date, if there is one.
+
+    `isoweekday()` is 1 for Monday through 7 for Sunday, which is exactly how
+    the plan stores its days - chosen for this, so no mapping table exists to
+    drift out of step.
+    """
+    wanted = target.isoweekday()
+    for session in sessions or []:
+        if session.get("day") == wanted:
+            return session
+    return None
+
+
+def plan_is_due(
+    at_time: str | None,
+    last_sent_at: datetime | None,
+    now: datetime,
+    tz: ZoneInfo,
+    sessions: list[dict],
+    days_ahead: int = 0,
+) -> bool:
+    """Whether a reminder about a training day should go out now.
+
+    The clock half is `daily_is_due` unchanged - reached the time, inside the
+    grace window, nothing sent today - so the two cannot drift apart. What this
+    adds is the only new question: does the day being reminded about actually
+    have a session? A rest day gets no message, which is the entire difference
+    between this and the daily reminder.
+    """
+    if not daily_is_due(at_time, last_sent_at, now, tz):
+        return False
+
+    target = _local(now, tz).date() + timedelta(days=days_ahead)
+    return session_on(sessions, target) is not None
+
+
 def inactivity_is_due(
     last_seen_at: datetime | None,
     last_sent_at: datetime | None,
@@ -167,4 +204,33 @@ def inactivity_message(days: int, profile: dict | None = None) -> str:
     return (
         f"Hace {when} que no hablamos. No pasa nada por parar, pero cuanto antes "
         f"vuelvas, menos base pierdes.{tail} ¿Cómo vas?"
+    )
+
+
+def plan_message(
+    session: dict, profile: dict | None = None, days_ahead: int = 0
+) -> str:
+    """What a training-day reminder says.
+
+    Carries the distance, because that is the thing being reminded about and a
+    message that only says "toca entrenar" makes someone open the app to find
+    out what. Written here rather than generated for the same reason as the
+    others: this fires at seven in the morning with nobody watching, and a model
+    call at that moment can fail or spend quota the runner would rather keep.
+    """
+    profile = profile or {}
+    distance = _km(session.get("km", 0))
+    note = (session.get("note") or "").strip()
+    detail = f"{distance} kilómetros{f' {note}' if note else ''}"
+
+    goal = profile.get("goal")
+    tail = f" Vamos con ese {goal}." if goal else ""
+
+    if days_ahead >= 1:
+        return (
+            f"Mañana toca entrenar: {detail}. Deja la ropa lista esta noche y no "
+            f"tendrás que decidir nada por la mañana.{tail}"
+        )
+    return (
+        f"Hoy toca entrenar: {detail}. Cuéntame cómo te fue cuando termines.{tail}"
     )

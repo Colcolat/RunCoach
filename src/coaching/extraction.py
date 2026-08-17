@@ -34,6 +34,11 @@ from datetime import date, timedelta
 GOALS = ("5K", "10K", "21K", "Maratón")
 LEVELS = ("principiante", "intermedio", "avanzado")
 
+# Which days a requested reminder is about. "cada_dia" is the F6 behaviour and
+# stays the default when nothing is said; the other two are tied to the week in
+# the panel, so a runner can be nudged only when they actually have to run.
+REMINDER_SCOPES = ("cada_dia", "dias_de_entreno", "vispera")
+
 # A world-class marathoner runs about 250 km a week. Anything above this is a
 # transcription artefact or a misread, not a runner.
 MAX_WEEKLY_KM = 300.0
@@ -56,8 +61,17 @@ EXTRACTION_SCHEMA = {
         # F6. Not a profile column: it becomes a row in `reminders`, so the
         # agent takes it out of the result before writing the rest.
         "reminder_time": {"type": "STRING", "nullable": True},
+        # Which days the reminder is about. F9: a runner can now ask to be
+        # nudged only on the days their plan has a session, or the evening
+        # before one, instead of every single morning.
+        "reminder_scope": {
+            "type": "STRING",
+            "enum": list(REMINDER_SCOPES),
+            "nullable": True,
+        },
     },
     "required": [
+        "reminder_scope",
         "goal",
         "experience_level",
         "weekly_km",
@@ -66,8 +80,9 @@ EXTRACTION_SCHEMA = {
     ],
 }
 
-# The key `clean` may return that does not belong on the user row.
+# The keys `clean` may return that do not belong on the user row.
 REMINDER_FIELD = "reminder_time"
+SCOPE_FIELD = "reminder_scope"
 
 
 def _strip_accents(text: str) -> str:
@@ -235,6 +250,13 @@ def _clean_race_date(value, today: date) -> str | None:
     return parsed.isoformat()
 
 
+def _clean_scope(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    scope = _strip_accents(value).strip().lower()
+    return scope if scope in REMINDER_SCOPES else None
+
+
 def _clean_reminder_time(value) -> str | None:
     """Normalise to "HH:MM", refusing anything that is not a real clock time.
 
@@ -270,5 +292,6 @@ def clean(raw: dict | None, today: date) -> dict:
         "weekly_km": _clean_weekly_km(raw.get("weekly_km")),
         "race_date": _clean_race_date(raw.get("race_date"), today),
         REMINDER_FIELD: _clean_reminder_time(raw.get(REMINDER_FIELD)),
+        SCOPE_FIELD: _clean_scope(raw.get(SCOPE_FIELD)),
     }
     return {key: value for key, value in candidates.items() if value is not None}

@@ -21,6 +21,7 @@ from src.coaching.extraction import (
     EXTRACTION_SCHEMA,
     HISTORY_TURNS,
     REMINDER_FIELD,
+    SCOPE_FIELD,
     build_extraction_prompt,
     clean,
     mentions_profile_information,
@@ -29,8 +30,10 @@ from src.coaching.plan import (
     PLAN_PROMPT,
     PLAN_SCHEMA,
     looks_like_a_plan,
+    replaces_the_week,
 )
 from src.coaching.plan import clean as clean_plan
+from src.coaching.plan import merge as merge_plan
 from src.coaching.prompts import build_system_prompt, welcome_message
 from src.config import get_settings
 from src.services import db_service
@@ -147,9 +150,7 @@ class CoachAgent:
             # A requested reminder time is not a profile column, it is a row in
             # `reminders`. Taken out here so update_profile keeps receiving only
             # things that belong on the user.
-            at_time = updates.pop(REMINDER_FIELD, None)
-            if at_time:
-                self._db.set_daily_reminder(user["id"], at_time)
+            self._set_reminder(user["id"], updates)
 
             # This turn's reply was composed against the profile as it was
             # before, which costs nothing: the model already saw the runner say
@@ -185,6 +186,28 @@ class CoachAgent:
             conversation_id=conversation_id,
             plan_pending=pending,
         )
+
+    def _set_reminder(self, user_id: int, updates: dict) -> None:
+        """Turn a requested reminder into the right kind of row.
+
+        Taken out of the profile updates rather than written to the user, since
+        a reminder is a row in `reminders`. The scope decides which kind: asking
+        to be nudged on training days, or the evening before one, is a different
+        thing from asking for a nudge every morning, and answering all three
+        with the daily reminder is what made "recuérdame un día antes del día de
+        ejercicio" quietly become "recuérdame todos los días".
+        """
+        at_time = updates.pop(REMINDER_FIELD, None)
+        scope = updates.pop(SCOPE_FIELD, None)
+        if not at_time:
+            return
+
+        if scope == "vispera":
+            self._db.set_plan_reminder(user_id, at_time, eve=True)
+        elif scope == "dias_de_entreno":
+            self._db.set_plan_reminder(user_id, at_time, eve=False)
+        else:
+            self._db.set_daily_reminder(user_id, at_time)
 
     async def read_plan(self, user_id: int, reply: str) -> list[dict]:
         """Read the week's sessions out of a reply the coach just gave.
@@ -226,6 +249,13 @@ class CoachAgent:
             return []
 
         try:
+            # A reply that only speaks about part of a week folds into what is
+            # already stored. Replacing on every mention of two days is what
+            # turned "mantén el sábado de tres y el domingo de nueve" into a
+            # twelve-kilometre week, silently deleting the Tuesday and Thursday
+            # the runner was still meant to run.
+            if not replaces_the_week(raw):
+                sessions = merge_plan(self._db.get_plan(user_id), sessions)
             self._db.save_plan(user_id, sessions)
         except Exception:  # noqa: BLE001
             logger.exception("Could not save the week's plan")
@@ -307,9 +337,7 @@ class CoachAgent:
 
         try:
             user = self._db.get_or_create_user(web_session_id=web_session_id)
-            at_time = updates.pop(REMINDER_FIELD, None)
-            if at_time:
-                self._db.set_daily_reminder(user["id"], at_time)
+            self._set_reminder(user["id"], updates)
             if updates:
                 self._db.update_profile(user["id"], **updates)
         except Exception:  # noqa: BLE001

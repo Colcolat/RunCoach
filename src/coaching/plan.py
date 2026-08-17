@@ -97,8 +97,14 @@ PLAN_SCHEMA = {
                 "required": ["day", "km", "note"],
             },
         },
+        # Whether this reply lays out a whole week or only speaks about part of
+        # one. Without it every mention of two days replaced everything: told
+        # "mantén el sábado de tres y el domingo de nueve", the panel dropped
+        # the Tuesday and Thursday it already had and showed a twelve-kilometre
+        # week the coach never prescribed.
+        "replaces_the_week": {"type": "BOOLEAN"},
     },
-    "required": ["sessions"],
+    "required": ["sessions", "replaces_the_week"],
 }
 
 
@@ -125,6 +131,16 @@ kilómetros: en "haz cuatro el martes y otros cuatro el jueves", el martes son 4
 note es una descripción muy corta del tipo de sesión, de dos o tres palabras, tal como la dijo el \
 entrenador: "suaves", "tirada larga", "series cortas", "tempo". Si no dice nada del tipo, devuelve \
 null.
+
+replaces_the_week distingue dos cosas que suenan parecido y no lo son.
+
+Es true cuando el entrenador está montando la semana entera: "esta semana haces", "repartimos los \
+veintidós kilómetros así", "el plan de esta semana es".
+
+Es false cuando solo habla de algunos días de una semana que ya existía: "para lo que queda de \
+semana, mantén el sábado y el domingo", "cambiamos el jueves por el viernes", "el martes mejor \
+hazlo más suave". Ahí devuelves únicamente los días de los que habla, y los demás días de su \
+semana se quedan como estaban.
 
 Si el entrenador no está dando un plan repartido por días, devuelve una lista vacía. Es mucho \
 mejor devolver nada que inventar un reparto que no dijo: el corredor va a ver estos números en \
@@ -153,6 +169,28 @@ def _clean_note(value) -> str | None:
         return None
     note = " ".join(value.split())[:MAX_NOTE].strip()
     return note or None
+
+
+def replaces_the_week(raw: dict | None) -> bool:
+    """Whether the reading should replace the stored week or be folded into it.
+
+    Defaults to False, which is the safe direction: folding a genuine new week
+    into an old one leaves at most a stale day, while replacing on a passing
+    mention of two days deletes the rest of somebody's training.
+    """
+    return bool(isinstance(raw, dict) and raw.get("replaces_the_week") is True)
+
+
+def merge(existing: list[dict], update: list[dict]) -> list[dict]:
+    """Fold a partial reading into the week already on record.
+
+    A day named again is overwritten - "el martes mejor hazlo más suave" is a
+    correction, and the newer number is the one the coach means. Days not
+    mentioned survive untouched, which is the whole point.
+    """
+    by_day = {session["day"]: session for session in existing}
+    by_day.update({session["day"]: session for session in update})
+    return [by_day[day] for day in sorted(by_day)]
 
 
 def clean(raw: dict | None) -> list[dict]:

@@ -80,6 +80,14 @@ Puedes recordarle a la persona que salga a entrenar, aunque no tenga la aplicaci
 pide que le avises o le recuerdes a una hora, di que sí y confirma la hora que has entendido: \
 "hecho, te aviso a las siete". No hace falta que hagas nada más, el aviso queda puesto solo.
 
+Ese aviso puede seguir su plan en vez de sonar todos los días. Si te pide que le recuerdes los \
+días que le toca entrenar, o el día antes de cada sesión, también puedes: confirma qué has \
+entendido y la hora, por ejemplo "hecho, la noche antes de cada entreno te aviso a las nueve". \
+Los días de descanso no recibe nada, que es justo la gracia.
+
+Para eso necesitas haberle dado ya un plan repartido por días. Si te lo pide y todavía no se lo \
+has dado, dáselo primero en el mismo mensaje y confirma el aviso después.
+
 Los avisos llegan por Telegram. Si te lo pide y todavía no lo tiene conectado, dile que pulse \
 "Conectar Telegram" en la página y que así le llegan.
 

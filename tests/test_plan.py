@@ -283,3 +283,89 @@ def test_a_runner_with_no_week_gets_an_empty_one_not_an_error(client):
 
     assert body["plan"] == []
     assert body["plan_total_km"] == 0
+
+
+# --- a partial week must not delete the rest ---------------------------------
+#
+# Found in use, not in a test. The coach was asked about a run already done and
+# answered "para lo que queda de semana, mantén el sábado de tres y el domingo
+# de nueve tal como lo teníamos previsto". Two weekdays, so the gate fired; the
+# reading was those two days; and the stored week went from twenty-two
+# kilometres across four days to twelve across two. The runner lost the Tuesday
+# and Thursday they were still meant to run, and nothing said so.
+
+SEMANA_COMPLETA = [
+    {"day": 2, "km": 5.0, "note": "suaves"},
+    {"day": 4, "km": 5.0, "note": None},
+    {"day": 6, "km": 3.0, "note": "muy tranquilos"},
+    {"day": 7, "km": 9.0, "note": "tirada larga"},
+]
+
+
+def test_a_partial_reading_keeps_the_days_it_did_not_mention():
+    from src.coaching.plan import merge
+
+    quedaba = [{"day": 6, "km": 3.0, "note": None}, {"day": 7, "km": 9.0, "note": None}]
+
+    assert [s["day"] for s in merge(SEMANA_COMPLETA, quedaba)] == [2, 4, 6, 7]
+
+
+def test_naming_a_day_again_corrects_it():
+    """"el martes mejor hazlo más suave" is a correction, not a second Tuesday."""
+    from src.coaching.plan import merge
+
+    fusion = merge(SEMANA_COMPLETA, [{"day": 2, "km": 3.0, "note": "más suave"}])
+
+    assert fusion[0] == {"day": 2, "km": 3.0, "note": "más suave"}
+    assert len(fusion) == 4
+
+
+def test_a_reading_that_says_nothing_about_scope_is_treated_as_partial():
+    """The safe direction. Folding a genuine new week into an old one leaves at
+    most a stale day; replacing on a passing mention deletes real training."""
+    from src.coaching.plan import replaces_the_week
+
+    assert replaces_the_week({"sessions": []}) is False
+    assert replaces_the_week(None) is False
+    assert replaces_the_week({"replaces_the_week": "sí"}) is False
+    assert replaces_the_week({"replaces_the_week": True}) is True
+
+
+@pytest.mark.asyncio
+async def test_the_reported_case_no_longer_truncates_the_week(coach, gemini):
+    """The exact exchange from the screenshot, end to end."""
+    user = db_service.get_or_create_user(web_session_id="n" * 32)
+    db_service.save_plan(user["id"], SEMANA_COMPLETA)
+
+    gemini.plan_extraction = {
+        "sessions": [
+            {"day": 6, "km": 3.0, "note": None},
+            {"day": 7, "km": 9.0, "note": "tirada larga"},
+        ],
+        "replaces_the_week": False,
+    }
+    await coach.read_plan(
+        user["id"],
+        "Para lo que queda de semana, mantén el sábado de tres kilómetros y el "
+        "domingo de nueve tal como lo teníamos previsto.",
+    )
+
+    semana = db_service.get_plan(user["id"])
+    assert [s["day"] for s in semana] == [2, 4, 6, 7], "volvió a borrar media semana"
+    assert week_total(semana) == 22.0
+
+
+@pytest.mark.asyncio
+async def test_a_genuinely_new_week_still_replaces_the_old_one(coach, gemini):
+    """The other direction has to keep working: a lighter week must not inherit
+    the days it deliberately dropped."""
+    user = db_service.get_or_create_user(web_session_id="o" * 32)
+    db_service.save_plan(user["id"], SEMANA_COMPLETA)
+
+    gemini.plan_extraction = {
+        "sessions": [{"day": 3, "km": 4.0, "note": None}, {"day": 6, "km": 6.0, "note": None}],
+        "replaces_the_week": True,
+    }
+    await coach.read_plan(user["id"], "Esta semana lo hacemos en dos días: miércoles y sábado.")
+
+    assert [s["day"] for s in db_service.get_plan(user["id"])] == [3, 6]

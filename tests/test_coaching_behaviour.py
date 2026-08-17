@@ -389,3 +389,42 @@ async def test_a_week_of_prose_can_be_read_back_into_days():
     # The runner said twenty, so the ten percent rule caps the week at twenty-two.
     # If the reading were inventing distances this is where it would show.
     assert week_total(sessions) <= 22.5, f"{week_total(sessions)} km es más de lo permitido"
+
+
+@pytest.mark.asyncio
+async def test_asking_for_a_reminder_the_day_before_is_understood_as_one():
+    """The request this was built for, in the words it was asked in.
+
+    Offline tests fix what the validation accepts. This fixes that the model
+    still tells three similar-sounding things apart: a nudge every morning, a
+    nudge only on training days, and a nudge the night before one. Getting it
+    wrong is silent - the runner is told "hecho" and then gets the wrong thing,
+    or gets one every day.
+    """
+    from datetime import datetime, timezone
+
+    from src.coaching.extraction import EXTRACTION_SCHEMA, build_extraction_prompt
+    from src.coaching.extraction import clean as clean_profile
+
+    hoy = datetime.now(timezone.utc).date()
+    prompt = build_extraction_prompt(hoy, now_local="20:00")
+
+    casos = [
+        ("recuérdame la rutina un día antes del día de ejercicio a las nueve de la noche",
+         "21:00", "vispera"),
+        ("avísame solo los días que me toca entrenar, a las siete", "07:00", "dias_de_entreno"),
+        ("recuérdame a las siete", "07:00", None),
+        # A statement about when they run, not a request to be reminded.
+        ("suelo correr a las siete de la mañana", None, None),
+    ]
+
+    for mensaje, hora, alcance in casos:
+        await _throttle()
+        leido = clean_profile(
+            await GeminiService().extract(
+                message=mensaje, system_prompt=prompt, schema=EXTRACTION_SCHEMA, history=None
+            ),
+            hoy,
+        )
+        assert leido.get("reminder_time") == hora, f"{mensaje!r} -> {leido}"
+        assert leido.get("reminder_scope") == alcance, f"{mensaje!r} -> {leido}"
