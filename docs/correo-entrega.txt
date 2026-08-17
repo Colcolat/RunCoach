@@ -1,0 +1,38 @@
+Para:    administracion@adivor.com
+Asunto:  Ejercicio técnico - Juan José Zapata Buenfil (Practicante Dual)
+
+---
+
+Buenos días:
+
+Les comparto el ejercicio técnico. Está desplegado y funcionando, así que se
+puede probar directamente sin instalar nada:
+
+  https://runcoachjj.duckdns.org
+
+Es un entrenador de running conversacional. Se pulsa "Hablar", se le da permiso
+al micrófono y se le habla; también responde por escrito si el momento no es
+bueno para hablar en voz alta. Prepara para 5K, 10K, medio maratón y maratón.
+
+Incluye los dos extras opcionales del enunciado:
+
+  - Recuerda entre sesiones. Se puede empezar hablando en el navegador y
+    continuar por escrito, o desde Telegram, sin perder el hilo.
+
+  - Envía recordatorios proactivos. Si se le pide ("recuérdame a las siete"),
+    avisa por Telegram aunque la página esté cerrada.
+
+El código está aquí, con la documentación de cada decisión:
+
+  https://github.com/Colcolat/RunCoach
+
+Si les interesa el razonamiento más que el resultado, docs/recorrido/ explica
+fragmento por fragmento por qué está escrito así y qué error concreto evita cada
+decisión.
+
+Quedo atento a cualquier duda, y con mucho gusto lo enseño en vivo si prefieren.
+
+Un saludo,
+
+Juan José Zapata Buenfil
+juanitobuenfil@gmail.com
