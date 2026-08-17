@@ -113,3 +113,12 @@ if WEB_DIR.is_dir():
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
         return FileResponse(WEB_DIR / "index.html")
+
+    @app.get("/privacidad", include_in_schema=False)
+    def privacy() -> FileResponse:
+        """What is kept, who else sees it, and for how long.
+
+        A separate page rather than a modal: nobody reads a modal, and the point
+        is that this can be linked to and read before saying anything.
+        """
+        return FileResponse(WEB_DIR / "privacidad.html")

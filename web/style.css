@@ -683,3 +683,83 @@ body {
     min-width: 0;
   }
 }
+
+/* --- the AI disclosure, and the page behind it ----------------------------- */
+
+.legal-note {
+  margin-top: var(--sp-sm);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--outline-strong);
+  text-align: center;
+}
+
+.legal-note p {
+  margin: 0;
+}
+
+.legal-note strong {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.legal-note a,
+.prose a {
+  color: var(--accent-strong);
+}
+
+/* The privacy page is a document, not an application: one column, generous
+   measure, and none of the grid the coach needs. */
+body.legal {
+  display: block;
+  overflow-x: hidden;
+}
+
+.prose {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--sp-xl) var(--sp-lg) var(--sp-xl);
+}
+
+.prose h1 {
+  margin: 0 0 var(--sp-md);
+  font-size: var(--step-headline);
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+
+.prose h2 {
+  margin: var(--sp-xl) 0 var(--sp-sm);
+  font-size: var(--step-body-lg);
+  color: var(--text);
+}
+
+.prose p,
+.prose li {
+  color: var(--text-muted);
+}
+
+.prose .lead {
+  font-size: var(--step-body-lg);
+  color: var(--text);
+}
+
+.prose ul {
+  padding-left: var(--sp-lg);
+}
+
+.prose li {
+  margin-bottom: var(--sp-sm);
+}
+
+.prose .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  color: var(--text);
+}
+
+.prose .back {
+  margin-top: var(--sp-xl);
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--outline);
+}

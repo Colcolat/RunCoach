@@ -192,3 +192,53 @@ def test_hiding_something_actually_hides_it():
 
     assert "[hidden]" in css
     assert "display: none !important" in css
+
+
+# --- disclosure and privacy ---------------------------------------------------
+
+def test_the_page_says_it_is_not_a_person():
+    """The coach has a persona, a name and a voice. Someone could reasonably
+    take it for a human, and it costs one sentence to say otherwise."""
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+
+    assert "inteligencia artificial" in page
+    assert "no sustituyen a un médico" in page
+
+
+def test_the_privacy_notice_is_reachable_from_the_coach(client):
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+
+    assert 'href="/privacidad"' in page
+    assert client.get("/privacidad").status_code == 200
+
+
+def test_the_notice_says_what_is_kept_and_what_is_not():
+    aviso = (WEB / "privacidad.html").read_text(encoding="utf-8")
+
+    for prometido in ("Google", "Telegram", "localStorage", "audio"):
+        assert prometido in aviso, f"el aviso no menciona {prometido}"
+
+
+def test_the_notice_admits_the_session_id_is_not_authenticated():
+    """It is the one limitation with a real consequence for a reader, so it is
+    stated where a reader will see it rather than only in the README."""
+    aviso = (WEB / "privacidad.html").read_text(encoding="utf-8")
+
+    assert "no está autenticado" in aviso
+
+
+def test_the_notice_carries_a_crisis_line():
+    """A health-adjacent product that talks to people should not make anyone
+    search for this."""
+    aviso = (WEB / "privacidad.html").read_text(encoding="utf-8")
+
+    assert "911" in aviso
+
+
+def test_no_third_party_collector_was_ever_added():
+    """The notice promises none. This is what keeps that true."""
+    for asset in ("index.html", "privacidad.html", "app.js"):
+        source = (WEB / asset).read_text(encoding="utf-8").lower()
+        for rastreador in ("gtag", "analytics", "googletagmanager", "facebook",
+                           "hotjar", "clarity.ms", "segment.io", "mixpanel"):
+            assert rastreador not in source, f"{asset} carga {rastreador}"

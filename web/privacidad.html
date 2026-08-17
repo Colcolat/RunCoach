@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>RunCoach: privacidad</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body class="legal">
+    <main class="prose">
+      <h1>Aviso de privacidad</h1>
+
+      <p class="lead">
+        RunCoach es una demostración técnica, construida como ejercicio de
+        selección. No es un servicio comercial y no debe usarse como si lo
+        fuera. Esto describe exactamente qué se guarda, dónde y por cuánto
+        tiempo, porque nadie debería tener que adivinarlo.
+      </p>
+
+      <h2>Estás hablando con una inteligencia artificial</h2>
+      <p>
+        El entrenador no es una persona. Es un modelo de lenguaje
+        (<span class="mono">Gemini</span>, de Google) con instrucciones y reglas
+        de entrenamiento escritas por el autor. Puede equivocarse, y a veces se
+        equivoca con seguridad. Sus planes son orientativos y no sustituyen a un
+        entrenador, un médico ni un profesional de la nutrición.
+      </p>
+
+      <h2>Qué se guarda</h2>
+      <ul>
+        <li>
+          <strong>Lo que escribes y lo que dices.</strong> El texto de la
+          conversación, y la transcripción de lo hablado, para que el coach
+          recuerde de una sesión a otra.
+        </li>
+        <li>
+          <strong>Lo que el coach entiende de ti:</strong> objetivo, nivel,
+          kilómetros por semana y fecha de carrera. Sale de la conversación, no
+          de un formulario.
+        </li>
+        <li>
+          <strong>Un identificador aleatorio</strong> que tu navegador guarda en
+          <span class="mono">localStorage</span>. No hay cuenta, ni correo, ni
+          contraseña. Si lo borras, para el sistema eres alguien nuevo.
+        </li>
+        <li>
+          <strong>Tu identificador de Telegram</strong>, sólo si pulsas
+          "Conectar Telegram", y sólo para poder enviarte recordatorios.
+        </li>
+      </ul>
+
+      <h2>Qué no se guarda</h2>
+      <ul>
+        <li>
+          <strong>El audio.</strong> Tu voz pasa por el servidor hacia el modelo
+          y se descarta; no se escribe en disco en ningún momento. Lo que queda
+          es la transcripción.
+        </li>
+        <li>Nombre real, correo, teléfono ni dirección: nunca se piden.</li>
+        <li>Ubicación, contactos, ni nada del dispositivo salvo el micrófono
+          mientras lo estés usando.</li>
+        <li>No hay cookies de seguimiento, analítica, ni píxeles de terceros.
+          Ninguno.</li>
+      </ul>
+
+      <h2>Quién más lo ve</h2>
+      <p>
+        Dos terceros, y sólo porque el producto no existe sin ellos:
+      </p>
+      <ul>
+        <li>
+          <strong>Google</strong> recibe lo que dices, porque es quien genera la
+          respuesta. Se rige por sus propios términos para la API de Gemini.
+        </li>
+        <li>
+          <strong>Telegram</strong>, únicamente si conectas tu chat, y sólo los
+          mensajes de ese canal.
+        </li>
+      </ul>
+      <p>
+        Nadie más. No se vende, no se comparte con anunciantes y no se usa para
+        perfilar a nadie fuera de esta aplicación.
+      </p>
+
+      <h2>Dónde vive</h2>
+      <p>
+        En una base de datos SQLite dentro de un único servidor en AWS, cifrado
+        en tránsito con TLS. El archivo no es legible por otros usuarios de esa
+        máquina.
+      </p>
+
+      <h2>Cuánto dura</h2>
+      <p>
+        Mientras la demostración esté en pie. Al terminar el proceso de
+        selección, el servidor se apaga y los datos desaparecen con él. No hay
+        copias de seguridad en otro sitio.
+      </p>
+
+      <h2>Cómo borrar lo tuyo</h2>
+      <p>
+        Escríbele al entrenador pidiendo que borre tu conversación, o al autor al
+        correo de abajo. Borrar el <span class="mono">localStorage</span> de tu
+        navegador te desvincula de la conversación, aunque no la elimina del
+        servidor por sí solo.
+      </p>
+
+      <h2>Una advertencia que importa más que el resto</h2>
+      <p>
+        El identificador de sesión <strong>no está autenticado</strong>. Es una
+        decisión deliberada para una demostración sin registro, y significa que
+        quien conociera tu identificador podría ver tu conversación. No cuentes
+        aquí nada que no quieras que se lea.
+      </p>
+      <p>
+        Y si estás pasando por un momento difícil, esto no es el lugar. Habla con
+        alguien: en México, la Línea de la Vida atiende en el
+        <span class="mono">800 911 2000</span>, y ante una urgencia, el
+        <span class="mono">911</span>.
+      </p>
+
+      <h2>Contacto</h2>
+      <p>
+        Juan José Zapata Buenfil ·
+        <span class="mono">juanitobuenfil@gmail.com</span>
+      </p>
+
+      <p class="back"><a href="/">Volver al entrenador</a></p>
+    </main>
+  </body>
+</html>
