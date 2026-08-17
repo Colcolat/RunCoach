@@ -323,3 +323,36 @@ async def test_restrictive_eating_is_referred_not_planned_around():
 
     reply = replies[0].lower()
     assert any(w in reply for w in ("preocupa", "médico", "medico", "nutric", "profesional"))
+
+
+@pytest.mark.asyncio
+async def test_it_switches_language_mid_conversation():
+    """The first attempt at this only worked on a fresh session, which is the
+    easy case and the one I verified. With five turns of Spanish behind it the
+    model kept answering in Spanish through three consecutive English messages:
+    the weight of the history beat the instruction. The persona now says the
+    last message decides, and this is the case that proves it."""
+    replies = await converse([
+        "Hola, quiero preparar un maratón",
+        "Corro 3 kilómetros por semana",
+        "Soy principiante",
+        "Prefiero tres días por semana",
+        "How many kilometers should I run this week?",
+    ])
+
+    ultima = replies[-1].lower()
+    inglesa = sum(w in ultima for w in ("the ", "you ", "your ", "week", "kilomet", "run "))
+    assert inglesa >= 3, f"siguió en español pese al mensaje en inglés: {replies[-1][:200]}"
+
+
+@pytest.mark.asyncio
+async def test_and_switches_back():
+    """Both directions, or it is not a rule, it is a preference for English."""
+    replies = await converse([
+        "Hi, I want to train for a 10K",
+        "I run 20 kilometers per week",
+        "¿Y cuántos días debería descansar?",
+    ])
+
+    ultima = replies[-1].lower()
+    assert any(w in ultima for w in ("descans", "día", "dias", "semana")), replies[-1][:200]
