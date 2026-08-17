@@ -455,3 +455,41 @@ async def test_a_plan_names_the_days_even_when_nobody_asked_for_days():
         "ninguna respuesta nombró días de la semana:\n"
         + "\n".join(f"  - {r[:150]}" for r in replies)
     )
+
+
+@pytest.mark.asyncio
+async def test_the_days_it_prescribes_add_up_to_what_it_promised():
+    """The ten percent rule, checked by summing the plan instead of trusting the
+    sentence that announces it.
+
+    Found the moment the panel existed: on four kilometres a week the coach
+    announced five and a half and then prescribed one and a half on four days
+    plus one on Sunday - seven kilometres, forty percent over a cap that exists
+    to prevent injury. The prose had said the right number and the days had not,
+    and nobody had ever added them up.
+
+    The persona already ordered itself to sum the sessions; the model simply
+    cannot do that reliably across five spelled-out numbers. What fixed it was
+    removing the need: no session under two kilometres, so a small week cannot
+    be split into many days in the first place.
+    """
+    replies = await converse([
+        "Quiero preparar un maratón",
+        "Corro 4 km por semana",
+        "5 días",
+    ])
+
+    semanas = [r for r in replies if looks_like_a_plan(r)]
+    assert semanas, "ninguna respuesta nombró días"
+
+    await _throttle()
+    sessions = clean_plan(
+        await GeminiService().extract(
+            message=semanas[-1], system_prompt=PLAN_PROMPT, schema=PLAN_SCHEMA, history=None
+        )
+    )
+    total = week_total(sessions)
+
+    # Four a week, so the ten percent rule caps the increase at one kilometre.
+    assert total <= 5.0, f"{total} km sobre una base de 4: {semanas[-1][:200]}"
+    assert all(s["km"] >= 2.0 for s in sessions), f"salida por debajo del mínimo: {sessions}"
