@@ -428,3 +428,30 @@ async def test_asking_for_a_reminder_the_day_before_is_understood_as_one():
         )
         assert leido.get("reminder_time") == hora, f"{mensaje!r} -> {leido}"
         assert leido.get("reminder_scope") == alcance, f"{mensaje!r} -> {leido}"
+
+
+@pytest.mark.asyncio
+async def test_a_plan_names_the_days_even_when_nobody_asked_for_days():
+    """Reported from the deployed site: the panel stayed empty through a whole
+    conversation that ended in a plan.
+
+    The coach had said "tres días de kilómetro y medio cada uno" and never named
+    a weekday, so there was nothing to put in a calendar - and nothing to gate
+    on either. Every earlier test asked for the plan "repartido por días", which
+    is why they all passed and the real conversation did not.
+
+    It is better coaching regardless: an abstract "three days" leaves the runner
+    deciding when, which is the decision that keeps people indoors.
+    """
+    replies = await converse([
+        "Quiero preparar un maratón",
+        "Corro 4 km por semana",
+        "5 días",
+        "lo veo bien",
+    ])
+
+    con_dias = [r for r in replies if looks_like_a_plan(r)]
+    assert con_dias, (
+        "ninguna respuesta nombró días de la semana:\n"
+        + "\n".join(f"  - {r[:150]}" for r in replies)
+    )
