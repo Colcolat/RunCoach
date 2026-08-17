@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 from typing import Awaitable, Callable
+from urllib.parse import quote
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
@@ -71,10 +72,14 @@ class TelegramService:
         session id travels without a code table, an expiry or a second step.
         Returns None when no username is configured, so the client hides the
         button rather than offering a broken link.
+
+        The id is percent-encoded rather than trusted. It reaches here straight
+        off a URL path, and a space or an ampersand in it would produce an
+        address that either breaks or carries something we did not intend.
         """
-        if not self.username:
+        if not self.username or not session_id:
             return None
-        return f"https://t.me/{self.username}?start={session_id}"
+        return f"https://t.me/{self.username}?start={quote(session_id, safe='')}"
 
     async def start(
         self,
@@ -101,10 +106,17 @@ class TelegramService:
             await update.message.reply_text(reply)
 
         async def text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+            # effective_message, not message: an edited message arrives as
+            # edited_message and still reaches this handler, where update.message
+            # is None and every attribute on it raises.
+            incoming = update.effective_message
+            if incoming is None:
+                return
+
             chat_id = update.effective_chat.id
             name = update.effective_user.first_name if update.effective_user else None
-            reply = await on_message(chat_id, update.message.text or "", name)
-            await update.message.reply_text(reply)
+            reply = await on_message(chat_id, incoming.text or "", name)
+            await incoming.reply_text(reply)
 
         app.add_handler(CommandHandler("start", start_command))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message))

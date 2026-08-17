@@ -251,3 +251,119 @@ def test_audio_over_the_cap_is_not_forwarded_to_the_model(voice_client):
         ws.receive_json()
 
     assert session.sent_audio == []
+
+
+# --- the spoken profile, through the socket ----------------------------------
+#
+# The agent-level tests cover reading a profile out of speech. Nothing covered
+# the path through this module, which is where the F5 memory defect actually
+# lived: transcripts were persisted and nothing was ever read back from them.
+
+def test_a_completed_spoken_turn_is_persisted_and_read(voice_client, gemini, coach):
+    from src import dependencies
+    from src.services import db_service
+
+    db_service.create_schema()
+    gemini.extraction = {"goal": "21K", "weekly_km": 18.0}
+    app.dependency_overrides[dependencies.get_coach] = lambda: coach
+
+    session = FakeSession([
+        server_message(user_text="corro 18 kilómetros por semana, quiero un 21K"),
+        server_message(coach_text="Dieciocho es buena base."),
+        server_message(turn_complete=True),
+    ])
+    client, _ = voice_client(session)
+
+    sesion = "b" * 32
+    with client.websocket_connect(f"/ws/voice?session_id={sesion}") as ws:
+        ws.receive_json()  # ready
+        tipos = [ws.receive_json()["type"] for _ in range(4)]
+
+    # The turn ends, and the panel is told the profile moved.
+    assert "turn_complete" in tipos
+    assert "profile_updated" in tipos
+
+    # Both sides of the exchange are in the same history as the text chat.
+    user = db_service.get_or_create_user(web_session_id=sesion)
+    history = db_service.get_history(db_service.get_or_create_conversation(user["id"]))
+    assert [m["channel"] for m in history] == ["voice", "voice"]
+    assert user["goal"] == "21K"
+    assert user["weekly_km"] == 18.0
+
+
+def test_only_what_the_runner_said_is_read_for_a_profile(voice_client, gemini, coach):
+    """The coach's own words are not facts about the runner."""
+    from src import dependencies
+    from src.services import db_service
+
+    db_service.create_schema()
+    app.dependency_overrides[dependencies.get_coach] = lambda: coach
+
+    session = FakeSession([
+        server_message(user_text="hola"),
+        server_message(coach_text="Corres 40 kilómetros por semana según mis notas."),
+        server_message(turn_complete=True),
+    ])
+    client, _ = voice_client(session)
+
+    with client.websocket_connect("/ws/voice?session_id=" + "c" * 32) as ws:
+        ws.receive_json()
+        for _ in range(3):
+            ws.receive_json()
+
+    enviado = [c["message"] for c in gemini.extractions]
+    assert not any("40" in m for m in enviado), f"leyo lo que dijo el coach: {enviado}"
+
+
+def test_a_turn_with_no_session_id_is_not_persisted(voice_client, coach):
+    """An anonymous socket still works; it just leaves nothing behind."""
+    from src import dependencies
+    from src.services import db_service
+
+    db_service.create_schema()
+    app.dependency_overrides[dependencies.get_coach] = lambda: coach
+
+    session = FakeSession([
+        server_message(user_text="algo"),
+        server_message(turn_complete=True),
+    ])
+    client, _ = voice_client(session)
+
+    with client.websocket_connect("/ws/voice") as ws:
+        ws.receive_json()
+        ws.receive_json()
+        assert ws.receive_json()["type"] == "turn_complete"
+
+
+# --- when things fail --------------------------------------------------------
+
+def test_a_model_that_will_not_connect_falls_back_to_text(voice_client):
+    """The runner gets the text chat rather than a socket that dies silently."""
+    from src.services.live_service import LiveUnavailableError
+
+    client, live = voice_client()
+
+    def explode(system_prompt):
+        raise LiveUnavailableError("no reachable")
+
+    live.connect = explode
+
+    with client.websocket_connect("/ws/voice") as ws:
+        message = ws.receive_json()
+
+    assert message == {"type": "fallback", "reason": "unavailable"}
+
+
+def test_an_unexpected_failure_still_ends_in_a_fallback(voice_client):
+    """Whatever breaks, the browser is told to switch rather than left waiting."""
+    client, live = voice_client()
+
+    def explode(system_prompt):
+        raise RuntimeError("algo raro")
+
+    live.connect = explode
+
+    with client.websocket_connect("/ws/voice") as ws:
+        message = ws.receive_json()
+
+    assert message == {"type": "fallback", "reason": "error"}

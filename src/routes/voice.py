@@ -94,6 +94,10 @@ async def _pump_model(
     sentence across a dozen rows and make the replayed history unreadable.
     """
     spoken = {"user": [], "coach": []}
+    # asyncio keeps only a weak reference to a running task, so one nobody holds
+    # can be garbage collected mid-execution. Held until it finishes, and
+    # discarded there, which also bounds the set.
+    background: set[asyncio.Task] = set()
 
     async for reply in session.receive():
         content = reply.server_content
@@ -127,9 +131,11 @@ async def _pump_model(
                 # detached: awaiting it here would hold up the audio pump, and
                 # this is a live conversation where that is audible.
                 if said:
-                    asyncio.create_task(
+                    task = asyncio.create_task(
                         _read_profile_from_speech(websocket, coach, session_id, said)
                     )
+                    background.add(task)
+                    task.add_done_callback(background.discard)
             spoken = {"user": [], "coach": []}
             await websocket.send_json({"type": "turn_complete"})
 
