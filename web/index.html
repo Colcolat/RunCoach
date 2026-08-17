@@ -19,6 +19,16 @@
       Rendered once and shown two ways, as a panel beside the conversation on a
       wide screen and as a strip of chips on a narrow one.
     -->
+    <!--
+      Profile and plan travel together on a wide screen, as one sticky column
+      beside the conversation. On a phone the wrapper dissolves (display:
+      contents) so the grid can place them separately: the profile chips above
+      the conversation, the week below it. Without that the plan sat between
+      the header and the microphone and pushed the microphone off a 740px
+      screen - the product's headline feature, below the fold, on the device it
+      was built for.
+    -->
+    <div class="sidebar">
     <aside class="profile" id="profile" aria-labelledby="profile-title">
       <h2 class="profile-title" id="profile-title">Tu perfil</h2>
       <p class="profile-hint" id="profile-hint">
@@ -46,6 +56,20 @@
       </dl>
 
       <!--
+        Hidden until the server says a bot is configured, so a deployment
+        without one shows nothing rather than a dead t.me link.
+      -->
+      <div class="telegram" id="telegram" hidden>
+        <a class="telegram-link" id="telegram-link" href="#" rel="noopener">
+          Conectar Telegram
+        </a>
+        <p class="telegram-note" id="telegram-note">
+          Para que te avise cuando toque entrenar, aunque tengas esto cerrado.
+        </p>
+      </div>
+    </aside>
+
+      <!--
         The week the coach laid out, hidden until there is one. Two views of the
         same sessions on purpose: the list carries the detail, and the strip
         below shows the shape of the week at a glance - including the rest days,
@@ -60,20 +84,7 @@
 
         <div class="week" id="week" role="list" aria-label="La semana de un vistazo"></div>
       </section>
-
-      <!--
-        Hidden until the server says a bot is configured, so a deployment
-        without one shows nothing rather than a dead t.me link.
-      -->
-      <div class="telegram" id="telegram" hidden>
-        <a class="telegram-link" id="telegram-link" href="#" rel="noopener">
-          Conectar Telegram
-        </a>
-        <p class="telegram-note" id="telegram-note">
-          Para que te avise cuando toque entrenar, aunque tengas esto cerrado.
-        </p>
-      </div>
-    </aside>
+    </div>
 
     <main class="stage">
       <!--

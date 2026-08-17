@@ -89,8 +89,18 @@ body {
      stretches the page, and every heading gets clipped off the left edge on a
      phone. The wide layout already had it; this one did not. */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "topbar" "profile" "stage";
-  grid-template-rows: auto auto 1fr;
+  /* The week goes below the conversation on a phone, not above it. Placed
+     between the header and the microphone it took 300px and pushed the mic and
+     the composer past the fold on a 740px screen, which on a voice-first
+     product means the thing it is for is the thing you cannot see. */
+  grid-template-areas: "topbar" "profile" "stage" "plan";
+  /* All four sized by content once the week joined the column. A 1fr stage
+     handed its space to the week and collapsed to 77px; a min-content floor
+     went the other way and let the conversation log push the stage past a
+     thousand. Content-sized rows plus a bounded log is the pair that holds:
+     the log scrolls inside itself, so the stage stays the height of the parts
+     that must not move. */
+  grid-template-rows: auto auto auto auto;
   min-height: 100dvh;
 
   /* Nothing here is ever meant to scroll sideways. If something does, it is a
@@ -573,6 +583,14 @@ body {
     order: 3;
     margin-bottom: env(safe-area-inset-bottom, 0);
   }
+  /* Without an order of its own this sat at 0 and led the column, so the AI
+     disclosure was the first thing on a phone, above the conversation it was
+     meant to sit under. It arrived with the privacy work and nothing caught it:
+     the layout checks at the time looked for overflow, and the order was fine
+     on the desktop where it was read. */
+  .legal-note {
+    order: 4;
+  }
   .bubble {
     max-width: 90%;
     font-size: var(--step-body);
@@ -604,7 +622,10 @@ body {
     padding-inline: 0;
   }
 
-  .profile {
+  /* One card holding both, sticky beside the conversation. */
+  .sidebar {
+    display: block;
+    grid-area: profile;
     align-self: start;
     position: sticky;
     top: var(--sp-lg);
@@ -613,6 +634,18 @@ body {
     background: var(--surface-low);
     border: 1px solid var(--outline);
     border-radius: var(--radius);
+  }
+
+  .profile,
+  .plan {
+    /* Ordinary flow inside the card; the grid places the card, not the two of
+       them separately. */
+    padding: 0;
+  }
+
+  .plan {
+    margin-top: var(--sp-lg);
+    padding-top: var(--sp-md);
   }
 
   .profile-title {
@@ -778,9 +811,64 @@ body.legal {
  */
 
 .plan {
-  margin-top: var(--sp-lg);
-  padding-top: var(--sp-md);
+  margin-top: var(--sp-md);
+  padding: var(--sp-md) var(--sp-lg) var(--sp-lg);
   border-top: 1px solid var(--outline);
+}
+
+/* On a narrow screen the wrapper dissolves so the grid can place the profile
+   and the week separately: chips above the conversation, week below it.
+   Scoped rather than left as a base rule, because this file appends new
+   sections at the end and an unscoped rule here would outrank the wide-screen
+   block above it - which is exactly what happened first time round. */
+@media (max-width: 63.99rem) {
+  .sidebar {
+    display: contents;
+  }
+
+  .plan {
+    grid-area: plan;
+  }
+
+  /* The stage carries min-height: 0 so the log can scroll rather than stretch
+     the page. That is right when the row is 1fr and wrong the moment the row is
+     sized by content: the track collapsed to 77px and the microphone, the log
+     and the composer all spilled out of it, overlapping the week below. The log
+     keeps its own zero floor; the stage gets its content height back. */
+  .stage {
+    min-height: auto;
+  }
+
+  /* The one elastic part of the stage, and the one that has to be bounded now
+     that the rows are content-sized: without a cap a long conversation makes
+     the stage as tall as its own history and pushes the composer off the
+     screen. It has always scrolled inside itself; this decides how much of it
+     shows. */
+  .log {
+    min-height: 12vh;
+    max-height: 20vh;
+  }
+}
+
+/* Short phones, where the header, the chips and a 140px microphone already
+   spend most of the screen. On a 667px screen the composer landed seven pixels
+   below the fold - close enough to look like a bug rather than a scroll. A
+   smaller microphone and a tighter conversation window buy it back; the
+   microphone is still the largest control on the page. */
+@media (max-width: 63.99rem) and (max-height: 44rem) {
+  :root {
+    --mic: 112px;
+  }
+
+  /* A lower floor as well as a lower ceiling. On a first visit the profile is
+     at its tallest - the hint and four empty chips - and a 12vh floor here put
+     the composer below the fold on a 667px screen, which it was not before the
+     week arrived. Small enough to give the composer its place back, large
+     enough that the conversation is still a conversation and not a sliver. */
+  .log {
+    min-height: 6vh;
+    max-height: 15vh;
+  }
 }
 
 .plan-title {
