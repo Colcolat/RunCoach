@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # it off costs personalisation and buys back half the daily request budget,
     # which is the trade worth having available on the free tier.
     profile_extraction_enabled: bool = True
+    # The second extraction, reading the week out of the coach's own reply.
+    # Separate switch so a deployment short on quota can keep the profile and
+    # drop the panel, which is the cheaper thing to lose.
+    plan_extraction_enabled: bool = True
     gemini_extraction_max_output_tokens: int = 400
 
     # Deliberately a different model from the coaching one. Rate limits are per

@@ -28,6 +28,11 @@ class StubGemini:
         # a turn; `extractions` records the calls, so a test can assert that a
         # turn was never sent at all.
         self.extraction: dict = {}
+        # F9 reads the week back out of the coach's own reply, through the same
+        # method with a different schema. Kept apart so a test can say which of
+        # the two it is arranging, rather than relying on one dict happening to
+        # mean nothing to the other cleaner.
+        self.plan_extraction: dict = {}
         self.extractions: list[dict] = []
         self.extract_fail_with: Exception | None = None
 
@@ -50,6 +55,11 @@ class StubGemini:
         )
         if self.extract_fail_with is not None:
             raise self.extract_fail_with
+        # The real service answers the shape it was asked for; so does this.
+        from src.coaching.plan import PLAN_SCHEMA
+
+        if schema is PLAN_SCHEMA:
+            return dict(self.plan_extraction)
         return dict(self.extraction)
 
 

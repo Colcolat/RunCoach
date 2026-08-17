@@ -28,6 +28,8 @@ import pytest
 from dotenv import load_dotenv
 
 from src.agents.coach_agent import CoachAgent
+from src.coaching.plan import PLAN_PROMPT, PLAN_SCHEMA, looks_like_a_plan, week_total
+from src.coaching.plan import clean as clean_plan
 from src.services.gemini_service import GeminiService
 
 load_dotenv()
@@ -356,3 +358,34 @@ async def test_and_switches_back():
 
     ultima = replies[-1].lower()
     assert any(w in ultima for w in ("descans", "día", "dias", "semana")), replies[-1][:200]
+
+
+@pytest.mark.asyncio
+async def test_a_week_of_prose_can_be_read_back_into_days():
+    """The whole panel rests on this: a plan the coach says in sentences has to
+    turn back into days and distances without the numbers moving.
+
+    Live because it is the one thing a stub cannot check. The offline tests fix
+    what the validation rejects; this fixes that the model and the persona still
+    agree on what a week sounds like - and it is what would break first if
+    either the persona's phrasing or the model behind it changed.
+    """
+    replies = await converse([
+        "Quiero un 10K, corro 20 kilómetros por semana y soy intermedio",
+        "Dame el plan repartido por días de esta semana",
+    ])
+    semana = replies[-1]
+    assert looks_like_a_plan(semana), f"no parece un plan: {semana[:200]}"
+
+    await _throttle()
+    sessions = clean_plan(
+        await GeminiService().extract(
+            message=semana, system_prompt=PLAN_PROMPT, schema=PLAN_SCHEMA, history=None
+        )
+    )
+
+    assert sessions, f"no se leyó ninguna sesión de: {semana[:200]}"
+    assert all(1 <= s["day"] <= 7 for s in sessions)
+    # The runner said twenty, so the ten percent rule caps the week at twenty-two.
+    # If the reading were inventing distances this is where it would show.
+    assert week_total(sessions) <= 22.5, f"{week_total(sessions)} km es más de lo permitido"

@@ -769,3 +769,123 @@ body.legal {
   font-size: var(--step-label);
   text-align: right;
 }
+
+/* --- the week (F9) ---------------------------------------------------------
+ *
+ * Two views of the same sessions. The list carries the detail a runner acts on;
+ * the strip below shows the shape of the week, including the rest days, which
+ * never appear in the list because the coach only names the days you run.
+ */
+
+.plan {
+  margin-top: var(--sp-lg);
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--outline);
+}
+
+.plan-title {
+  margin: 0;
+  font-size: var(--step-body);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.plan-total {
+  margin: var(--sp-xs) 0 var(--sp-md);
+  font-size: var(--step-label);
+  color: var(--text-muted);
+}
+
+.plan-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+}
+
+.plan-list li {
+  display: flex;
+  /* The note below is flex: 1 0 100%, which only drops onto its own line if the
+     row is allowed to wrap. Without this it overflowed the panel instead - the
+     kind of break that looks fine on a wide screen and only shows up on a
+     phone, which is where this panel is actually read. */
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-sm) var(--sp-sm);
+  padding: var(--sp-xs) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--outline) 45%, transparent);
+}
+
+.plan-list li:last-child {
+  border-bottom: 0;
+}
+
+.plan-day {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--step-label);
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.plan-km {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The kind of session, when the coach named one. Its own line on a narrow
+   column so a long one never squeezes the distance out of view. */
+.plan-note {
+  flex: 1 0 100%;
+  font-size: 0.75rem;
+  color: var(--outline-strong);
+}
+
+/* The strip. Seven equal columns, always: a week with one session and a week
+   with six have to be comparable at a glance, which they are not if the cells
+   resize to fit. */
+.week {
+  margin-top: var(--sp-md);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-xs) 1px;
+  border-radius: 6px;
+  background: var(--surface-high);
+  border: 1px solid var(--outline);
+}
+
+.day-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.day-km {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* Rest is a state, not an empty cell: an unstyled gap reads as a rendering bug,
+   and the day off is the part of a plan people quietly skip. */
+.day[data-rest="true"] {
+  background: transparent;
+  border-style: dashed;
+}
+
+.day[data-rest="true"] .day-km {
+  color: var(--outline-strong);
+}

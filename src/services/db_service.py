@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import session_scope
-from src.models import ROLES, Base, Conversation, Message, Reminder, User
+from src.models import ROLES, Base, Conversation, Message, Reminder, TrainingPlan, User
 from src.models.base import utcnow
 from src.database import get_engine
 
@@ -293,3 +293,42 @@ def touch_last_seen(user_id: int) -> None:
         user = session.get(User, user_id)
         if user is not None:
             user.last_seen_at = utcnow()
+
+
+# --- the week's plan (F9) -----------------------------------------------------
+
+def save_plan(user_id: int, sessions: list[dict]) -> None:
+    """Replace this runner's week.
+
+    Refuses an empty list rather than storing it. An extraction that found
+    nothing means the coach was not laying out a week this turn, which is not
+    the same as the week being over, and wiping the panel because someone asked
+    an unrelated question is the one failure mode a runner would actually
+    notice.
+    """
+    if not sessions:
+        return
+
+    with session_scope() as session:
+        plan = session.scalar(
+            select(TrainingPlan).where(TrainingPlan.user_id == user_id)
+        )
+        if plan is None:
+            session.add(TrainingPlan(user_id=user_id, sessions=sessions))
+            return
+        plan.sessions = sessions
+        # Assigning a JSON column in place does not always mark it dirty; the
+        # reassignment above does, but the timestamp is what the panel reads to
+        # say how fresh this is, so it is nudged explicitly.
+        plan.updated_at = utcnow()
+
+
+def get_plan(user_id: int) -> list[dict]:
+    """This runner's week, or an empty list when there is none yet."""
+    with session_scope() as session:
+        plan = session.scalar(
+            select(TrainingPlan).where(TrainingPlan.user_id == user_id)
+        )
+        if plan is None or not isinstance(plan.sessions, list):
+            return []
+        return list(plan.sessions)

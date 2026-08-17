@@ -46,6 +46,22 @@
       </dl>
 
       <!--
+        The week the coach laid out, hidden until there is one. Two views of the
+        same sessions on purpose: the list carries the detail, and the strip
+        below shows the shape of the week at a glance - including the rest days,
+        which never appear in the list because the coach only names the days you
+        run, and which are the part a runner is most likely to skip.
+      -->
+      <section class="plan" id="plan" aria-labelledby="plan-title" hidden>
+        <h2 class="plan-title" id="plan-title">Tu semana</h2>
+        <p class="plan-total" id="plan-total"></p>
+
+        <ol class="plan-list" id="plan-list"></ol>
+
+        <div class="week" id="week" role="list" aria-label="La semana de un vistazo"></div>
+      </section>
+
+      <!--
         Hidden until the server says a bot is configured, so a deployment
         without one shows nothing rather than a dead t.me link.
       -->
