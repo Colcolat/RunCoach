@@ -369,3 +369,74 @@ async def test_a_genuinely_new_week_still_replaces_the_old_one(coach, gemini):
     await coach.read_plan(user["id"], "Esta semana lo hacemos en dos días: miércoles y sábado.")
 
     assert [s["day"] for s in db_service.get_plan(user["id"])] == [3, 6]
+
+
+# --- what the sweep costs ----------------------------------------------------
+
+def test_the_sweep_reads_every_week_in_one_query():
+    """Raised in review and confirmed by counting: reading user.plan inside the
+    loop lazy-loaded one row at a time, twenty-one queries for twenty
+    reminders. The sweep runs every minute over every reminder in the system,
+    so this is the one query here whose shape grows with users."""
+    from sqlalchemy import event
+
+    from src.database import get_engine
+
+    for i in range(20):
+        sesion = f"s{i:031d}"
+        user = db_service.get_or_create_user(web_session_id=sesion)
+        db_service.link_telegram(sesion, 900000 + i)
+        db_service.set_plan_reminder(user["id"], "07:00")
+        db_service.save_plan(user["id"], [{"day": 2, "km": 5.0, "note": None}])
+
+    consultas: list[str] = []
+    escucha = lambda conn, cur, stmt, *a: consultas.append(stmt)  # noqa: E731
+    event.listen(get_engine(), "before_cursor_execute", escucha)
+    try:
+        filas = db_service.pending_reminders()
+    finally:
+        event.remove(get_engine(), "before_cursor_execute", escucha)
+
+    assert len(filas) == 20
+    assert len(consultas) == 1, f"{len(consultas)} consultas para 20 recordatorios"
+    assert all(row["sessions"] for row in filas), "el joinedload dejó de traer la semana"
+
+
+def test_a_stored_week_is_replaced_by_reassignment_not_mutation():
+    """SQLAlchemy instruments the attribute, so `plan.sessions = [...]` is seen
+    and written while appending to the existing list is silently lost at commit.
+    Measured both ways. This pins the half the code relies on; keeping every
+    write a reassignment is what makes flag_modified unnecessary."""
+    user = db_service.get_or_create_user(web_session_id="q" * 32)
+    db_service.save_plan(user["id"], [{"day": 2, "km": 5.0, "note": None}])
+
+    db_service.save_plan(user["id"], [{"day": 4, "km": 9.0, "note": "otra"}])
+
+    assert db_service.get_plan(user["id"]) == [{"day": 4, "km": 9.0, "note": "otra"}]
+
+
+def test_the_week_records_when_it_last_moved():
+    """updated_at carries onupdate=utcnow and moves on its own because the row
+    is dirty. An explicit assignment here was doing nothing but claiming it was
+    needed."""
+    import time
+
+    from sqlalchemy import select
+
+    from src.database import session_scope
+    from src.models import TrainingPlan
+
+    user = db_service.get_or_create_user(web_session_id="r" * 32)
+    db_service.save_plan(user["id"], [{"day": 2, "km": 5.0, "note": None}])
+
+    def sello():
+        with session_scope() as session:
+            return session.scalar(
+                select(TrainingPlan.updated_at).where(TrainingPlan.user_id == user["id"])
+            )
+
+    antes = sello()
+    time.sleep(1.05)
+    db_service.save_plan(user["id"], [{"day": 4, "km": 9.0, "note": None}])
+
+    assert sello() > antes

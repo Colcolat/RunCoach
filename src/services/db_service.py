@@ -18,7 +18,7 @@ import logging
 from datetime import datetime
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from src.database import session_scope
 from src.models import ROLES, Base, Conversation, Message, Reminder, TrainingPlan, User
@@ -295,6 +295,12 @@ def pending_reminders() -> list[dict]:
             select(Reminder, User)
             .join(User, Reminder.user_id == User.id)
             .where(Reminder.enabled.is_(True), User.telegram_id.is_not(None))
+            # Without this, reading user.plan below lazy-loads one row at a
+            # time: measured at twenty reminders it was twenty-one queries,
+            # twenty of them to training_plans. The sweep runs every minute and
+            # touches every reminder in the system, so it is the one query in
+            # this module whose shape actually scales with users.
+            .options(joinedload(User.plan))
         )
         return [
             {
@@ -367,11 +373,15 @@ def save_plan(user_id: int, sessions: list[dict]) -> None:
         if plan is None:
             session.add(TrainingPlan(user_id=user_id, sessions=sessions))
             return
+        # Reassigned, never mutated in place. SQLAlchemy instruments the
+        # attribute, so `plan.sessions = ...` is seen and written; appending to
+        # the existing list is not, and is silently lost at commit. Measured
+        # both ways rather than assumed. Keeping every write a reassignment is
+        # what makes flag_modified unnecessary here.
         plan.sessions = sessions
-        # Assigning a JSON column in place does not always mark it dirty; the
-        # reassignment above does, but the timestamp is what the panel reads to
-        # say how fresh this is, so it is nudged explicitly.
-        plan.updated_at = utcnow()
+        # updated_at moves itself: the column carries onupdate=utcnow, which
+        # fires because the row above is now dirty. An explicit nudge here was
+        # doing nothing but claiming it was needed.
 
 
 def get_plan(user_id: int) -> list[dict]:
