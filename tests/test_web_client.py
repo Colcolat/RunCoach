@@ -242,3 +242,39 @@ def test_no_third_party_collector_was_ever_added():
         for rastreador in ("gtag", "analytics", "googletagmanager", "facebook",
                            "hotjar", "clarity.ms", "segment.io", "mixpanel"):
             assert rastreador not in source, f"{asset} carga {rastreador}"
+
+
+def test_the_notice_exists_in_both_languages(client):
+    """The coach answers in whatever language it is spoken to. A reader who
+    arrived in English should not have to work through a Spanish page to find
+    out what is stored about them."""
+    assert client.get("/privacidad").status_code == 200
+    assert client.get("/privacy").status_code == 200
+
+
+def test_neither_language_is_a_dead_end():
+    es = (WEB / "privacidad.html").read_text(encoding="utf-8")
+    en = (WEB / "privacy.html").read_text(encoding="utf-8")
+
+    assert 'href="/privacy"' in es
+    assert 'href="/privacidad"' in en
+
+
+def test_both_notices_make_the_same_promises():
+    """A translation that quietly drops a disclosure is worse than no
+    translation, because it reads as the complete notice."""
+    es = (WEB / "privacidad.html").read_text(encoding="utf-8")
+    en = (WEB / "privacy.html").read_text(encoding="utf-8")
+
+    pares = [
+        ("Google", "Google"),
+        ("Telegram", "Telegram"),
+        ("localStorage", "localStorage"),
+        ("no está autenticado", "not authenticated"),
+        ("800 911 2000", "800 911 2000"),
+        ("nombre de pila", "first name"),
+        ("dirección IP completa", "full IP address"),
+    ]
+    for punto_es, punto_en in pares:
+        assert punto_es in es, f"falta en el aviso: {punto_es}"
+        assert punto_en in en, f"missing from the notice: {punto_en}"

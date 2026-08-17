@@ -115,10 +115,20 @@ if WEB_DIR.is_dir():
         return FileResponse(WEB_DIR / "index.html")
 
     @app.get("/privacidad", include_in_schema=False)
-    def privacy() -> FileResponse:
+    def privacy_es() -> FileResponse:
         """What is kept, who else sees it, and for how long.
 
         A separate page rather than a modal: nobody reads a modal, and the point
         is that this can be linked to and read before saying anything.
         """
         return FileResponse(WEB_DIR / "privacidad.html")
+
+    @app.get("/privacy", include_in_schema=False)
+    def privacy_en() -> FileResponse:
+        """The same notice in English.
+
+        The coach answers in whatever language it is spoken to, so a reader who
+        arrived in English should not have to work through a Spanish page to
+        find out what is being stored about them.
+        """
+        return FileResponse(WEB_DIR / "privacy.html")

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>RunCoach: privacy</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body class="legal">
+    <main class="prose">
+      <p class="lang"><a href="/privacidad">Leer en español</a></p>
+
+      <h1>Privacy notice</h1>
+
+      <p class="lead">
+        RunCoach is a technical demonstration, built as a recruitment exercise.
+        It is not a commercial service and should not be used as one. This
+        describes exactly what is kept, where, and for how long, because nobody
+        should have to guess.
+      </p>
+
+      <h2>You are talking to a machine</h2>
+      <p>
+        The coach is not a person. It is a language model
+        (<span class="mono">Gemini</span>, by Google) given a persona and
+        training rules written by the author. It can be wrong, and it is
+        sometimes confidently wrong. Its plans are guidance, not a substitute for
+        a coach, a doctor or a nutrition professional.
+      </p>
+
+      <h2>What is kept</h2>
+      <ul>
+        <li>
+          <strong>What you type and what you say.</strong> The text of the
+          conversation and the transcript of anything spoken, so the coach
+          remembers between sessions.
+        </li>
+        <li>
+          <strong>What the coach works out about you:</strong> goal, level,
+          weekly kilometres and race date. These come out of the conversation,
+          not from a form.
+        </li>
+        <li>
+          <strong>A random identifier</strong> your browser keeps in
+          <span class="mono">localStorage</span>. There is no account, no email
+          and no password. Clear it and you are a stranger again.
+        </li>
+        <li>
+          <strong>Your Telegram id and first name</strong>, only if you press
+          "Conectar Telegram". The name is never asked for: Telegram sends it
+          with every message, and it is stored so the coach can address you by
+          it.
+        </li>
+        <li>
+          <strong>When you were last here</strong>, which is what the inactivity
+          reminder is measured from, and which channel each message arrived on.
+        </li>
+        <li>
+          <strong>The time you asked to be reminded at</strong>, if you asked.
+        </li>
+      </ul>
+
+      <h2>What is not kept</h2>
+      <ul>
+        <li>
+          <strong>The audio.</strong> Your voice passes through the server on its
+          way to the model and is discarded; it is never written to disk. What
+          remains is the transcript.
+        </li>
+        <li>
+          Surname, email, phone or address. The only thing resembling a name is
+          the first name Telegram provides, and only if you connect it.
+        </li>
+        <li>
+          Location, contacts, or anything else from your device beyond the
+          microphone while you are actually using it.
+        </li>
+        <li>No tracking cookies, no analytics, no third-party pixels. None.</li>
+        <li>
+          <strong>Your full IP address.</strong> The web server notes every
+          request, as they all do, but the last group is dropped before the line
+          is written: what is stored looks like
+          <span class="mono">187.147.235.0</span>, which is enough to debug and
+          not enough to identify anyone.
+        </li>
+      </ul>
+
+      <h2>Who else sees it</h2>
+      <p>Two third parties, and only because the product does not exist without them:</p>
+      <ul>
+        <li>
+          <strong>Google</strong> receives what you say, because it is what
+          generates the reply. Its own terms for the Gemini API apply.
+        </li>
+        <li>
+          <strong>Telegram</strong>, only if you connect your chat, and only the
+          messages on that channel.
+        </li>
+      </ul>
+      <p>
+        Nobody else. Nothing is sold, nothing is shared with advertisers, and
+        nothing is used to profile anyone outside this application.
+      </p>
+
+      <h2>Where it lives</h2>
+      <p>
+        In a SQLite database on a single AWS server, encrypted in transit with
+        TLS. The file is not readable by other users of that machine.
+      </p>
+
+      <h2>How long</h2>
+      <p>
+        As long as the demonstration is up. When the recruitment process ends the
+        server is shut down and the data goes with it. There are no backups
+        anywhere else.
+      </p>
+
+      <h2>Deleting yours</h2>
+      <p>
+        Ask the coach to delete your conversation, or write to the author at the
+        address below. Clearing your browser's
+        <span class="mono">localStorage</span> detaches you from the
+        conversation, though it does not remove it from the server by itself.
+      </p>
+
+      <h2>The warning that matters more than the rest</h2>
+      <p>
+        The session identifier is <strong>not authenticated</strong>. That is a
+        deliberate choice for a demonstration with no sign-up, and it means
+        anyone who knew your identifier could read your conversation. Do not say
+        anything here you would not want read.
+      </p>
+      <p>
+        And if you are going through something difficult, this is not the place
+        for it. Talk to someone: in Mexico, Línea de la Vida answers on
+        <span class="mono">800 911 2000</span>, and in an emergency,
+        <span class="mono">911</span>. Elsewhere, your local emergency number.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Juan José Zapata Buenfil ·
+        <span class="mono">juanitobuenfil@gmail.com</span>
+      </p>
+
+      <p class="back"><a href="/">Back to the coach</a></p>
+    </main>
+  </body>
+</html>

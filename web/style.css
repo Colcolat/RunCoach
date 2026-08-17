@@ -763,3 +763,9 @@ body.legal {
   padding-top: var(--sp-md);
   border-top: 1px solid var(--outline);
 }
+
+.prose .lang {
+  margin: 0 0 var(--sp-lg);
+  font-size: var(--step-label);
+  text-align: right;
+}
