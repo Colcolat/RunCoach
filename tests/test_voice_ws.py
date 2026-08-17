@@ -367,3 +367,98 @@ def test_an_unexpected_failure_still_ends_in_a_fallback(voice_client):
         message = ws.receive_json()
 
     assert message == {"type": "fallback", "reason": "error"}
+
+
+# --- the spoken week, through the socket --------------------------------------
+#
+# Voice is the headline of this product. A week given by speaking has to reach
+# the panel exactly as one given in writing does, or the feature fills in for
+# people who type and stays empty for the people using what it was built for.
+
+SEMANA_HABLADA = (
+    "Haz el martes cinco kilómetros suaves, el jueves otros cinco, el sábado tres "
+    "muy tranquilos y el domingo la tirada larga de nueve kilómetros."
+)
+
+
+def test_a_week_spoken_aloud_fills_the_panel(voice_client, gemini, coach):
+    from src import dependencies
+    from src.services import db_service
+
+    db_service.create_schema()
+    gemini.plan_extraction = {"sessions": [
+        {"day": 2, "km": 5.0, "note": "suaves"},
+        {"day": 4, "km": 5.0, "note": None},
+        {"day": 6, "km": 3.0, "note": "muy tranquilos"},
+        {"day": 7, "km": 9.0, "note": "tirada larga"},
+    ]}
+    app.dependency_overrides[dependencies.get_coach] = lambda: coach
+
+    session = FakeSession([
+        server_message(user_text="dame el plan de la semana"),
+        server_message(coach_text=SEMANA_HABLADA),
+        server_message(turn_complete=True),
+    ])
+    client, _ = voice_client(session)
+
+    sesion = "w" * 32
+    with client.websocket_connect(f"/ws/voice?session_id={sesion}") as ws:
+        ws.receive_json()  # ready
+        tipos = [ws.receive_json()["type"] for _ in range(4)]
+
+    assert "profile_updated" in tipos, "el panel nunca se enteró de la semana"
+
+    user = db_service.get_or_create_user(web_session_id=sesion)
+    assert [s["day"] for s in db_service.get_plan(user["id"])] == [2, 4, 6, 7]
+
+
+def test_the_week_is_read_from_the_coach_not_from_the_runner(voice_client, gemini, coach):
+    """Feeding the coach's reply to the profile extractor would store the plan's
+    own numbers as the runner's current volume - the precise mistake the persona
+    spends a paragraph warning itself against."""
+    from src import dependencies
+    from src.coaching.plan import PLAN_SCHEMA
+    from src.services import db_service
+
+    db_service.create_schema()
+    app.dependency_overrides[dependencies.get_coach] = lambda: coach
+
+    session = FakeSession([
+        server_message(user_text="¿y el plan?"),
+        server_message(coach_text=SEMANA_HABLADA),
+        server_message(turn_complete=True),
+    ])
+    client, _ = voice_client(session)
+
+    with client.websocket_connect("/ws/voice?session_id=" + "x" * 32) as ws:
+        ws.receive_json()  # ready
+        for _ in range(3):  # two transcripts and turn_complete
+            ws.receive_json()
+
+    leido_como_perfil = [
+        call["message"] for call in gemini.extractions if call["schema"] is not PLAN_SCHEMA
+    ]
+    assert SEMANA_HABLADA not in leido_como_perfil
+
+
+def test_a_spoken_turn_with_no_week_spends_nothing_on_reading_one(voice_client, gemini, coach):
+    from src import dependencies
+    from src.services import db_service
+    from src.coaching.plan import PLAN_SCHEMA
+
+    db_service.create_schema()
+    app.dependency_overrides[dependencies.get_coach] = lambda: coach
+
+    session = FakeSession([
+        server_message(user_text="gracias"),
+        server_message(coach_text="A ti. Nos vemos mañana."),
+        server_message(turn_complete=True),
+    ])
+    client, _ = voice_client(session)
+
+    with client.websocket_connect("/ws/voice?session_id=" + "y" * 32) as ws:
+        ws.receive_json()
+        for _ in range(3):
+            ws.receive_json()
+
+    assert not any(call["schema"] is PLAN_SCHEMA for call in gemini.extractions)

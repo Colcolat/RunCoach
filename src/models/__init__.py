@@ -7,6 +7,7 @@ exactly that reason.
 
 from src.models.base import Base, utcnow
 from src.models.conversation import CHANNELS, ROLES, Conversation, Message
+from src.models.plan import TrainingPlan
 from src.models.reminder import REMINDER_KINDS, Reminder
 from src.models.user import User
 
@@ -17,6 +18,7 @@ __all__ = [
     "Conversation",
     "Message",
     "Reminder",
+    "TrainingPlan",
     "ROLES",
     "CHANNELS",
     "REMINDER_KINDS",

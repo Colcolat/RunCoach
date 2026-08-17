@@ -52,7 +52,12 @@ class User(Base):
     reminders: Mapped[list["Reminder"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    # One current week, not a list: asking for a new plan replaces it.
+    plan: Mapped["TrainingPlan | None"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
 
 
 from src.models.conversation import Conversation  # noqa: E402  (resolves the annotation)
 from src.models.reminder import Reminder  # noqa: E402  (resolves the annotation)
+from src.models.plan import TrainingPlan  # noqa: E402  (resolves the annotation)

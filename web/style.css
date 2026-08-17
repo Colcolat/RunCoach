@@ -89,8 +89,18 @@ body {
      stretches the page, and every heading gets clipped off the left edge on a
      phone. The wide layout already had it; this one did not. */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "topbar" "profile" "stage";
-  grid-template-rows: auto auto 1fr;
+  /* The week goes below the conversation on a phone, not above it. Placed
+     between the header and the microphone it took 300px and pushed the mic and
+     the composer past the fold on a 740px screen, which on a voice-first
+     product means the thing it is for is the thing you cannot see. */
+  grid-template-areas: "topbar" "profile" "stage" "plan";
+  /* All four sized by content once the week joined the column. A 1fr stage
+     handed its space to the week and collapsed to 77px; a min-content floor
+     went the other way and let the conversation log push the stage past a
+     thousand. Content-sized rows plus a bounded log is the pair that holds:
+     the log scrolls inside itself, so the stage stays the height of the parts
+     that must not move. */
+  grid-template-rows: auto auto auto auto;
   min-height: 100dvh;
 
   /* Nothing here is ever meant to scroll sideways. If something does, it is a
@@ -573,6 +583,14 @@ body {
     order: 3;
     margin-bottom: env(safe-area-inset-bottom, 0);
   }
+  /* Without an order of its own this sat at 0 and led the column, so the AI
+     disclosure was the first thing on a phone, above the conversation it was
+     meant to sit under. It arrived with the privacy work and nothing caught it:
+     the layout checks at the time looked for overflow, and the order was fine
+     on the desktop where it was read. */
+  .legal-note {
+    order: 4;
+  }
   .bubble {
     max-width: 90%;
     font-size: var(--step-body);
@@ -604,7 +622,10 @@ body {
     padding-inline: 0;
   }
 
-  .profile {
+  /* One card holding both, sticky beside the conversation. */
+  .sidebar {
+    display: block;
+    grid-area: profile;
     align-self: start;
     position: sticky;
     top: var(--sp-lg);
@@ -613,6 +634,18 @@ body {
     background: var(--surface-low);
     border: 1px solid var(--outline);
     border-radius: var(--radius);
+  }
+
+  .profile,
+  .plan {
+    /* Ordinary flow inside the card; the grid places the card, not the two of
+       them separately. */
+    padding: 0;
+  }
+
+  .plan {
+    margin-top: var(--sp-lg);
+    padding-top: var(--sp-md);
   }
 
   .profile-title {
@@ -768,4 +801,179 @@ body.legal {
   margin: 0 0 var(--sp-lg);
   font-size: var(--step-label);
   text-align: right;
+}
+
+/* --- the week (F9) ---------------------------------------------------------
+ *
+ * Two views of the same sessions. The list carries the detail a runner acts on;
+ * the strip below shows the shape of the week, including the rest days, which
+ * never appear in the list because the coach only names the days you run.
+ */
+
+.plan {
+  margin-top: var(--sp-md);
+  padding: var(--sp-md) var(--sp-lg) var(--sp-lg);
+  border-top: 1px solid var(--outline);
+}
+
+/* On a narrow screen the wrapper dissolves so the grid can place the profile
+   and the week separately: chips above the conversation, week below it.
+   Scoped rather than left as a base rule, because this file appends new
+   sections at the end and an unscoped rule here would outrank the wide-screen
+   block above it - which is exactly what happened first time round. */
+@media (max-width: 63.99rem) {
+  .sidebar {
+    display: contents;
+  }
+
+  .plan {
+    grid-area: plan;
+  }
+
+  /* The stage carries min-height: 0 so the log can scroll rather than stretch
+     the page. That is right when the row is 1fr and wrong the moment the row is
+     sized by content: the track collapsed to 77px and the microphone, the log
+     and the composer all spilled out of it, overlapping the week below. The log
+     keeps its own zero floor; the stage gets its content height back. */
+  .stage {
+    min-height: auto;
+  }
+
+  /* The one elastic part of the stage, and the one that has to be bounded now
+     that the rows are content-sized: without a cap a long conversation makes
+     the stage as tall as its own history and pushes the composer off the
+     screen. It has always scrolled inside itself; this decides how much of it
+     shows. */
+  .log {
+    min-height: 12vh;
+    max-height: 20vh;
+  }
+}
+
+/* Short phones, where the header, the chips and a 140px microphone already
+   spend most of the screen. On a 667px screen the composer landed seven pixels
+   below the fold - close enough to look like a bug rather than a scroll. A
+   smaller microphone and a tighter conversation window buy it back; the
+   microphone is still the largest control on the page. */
+@media (max-width: 63.99rem) and (max-height: 44rem) {
+  :root {
+    --mic: 112px;
+  }
+
+  /* A lower floor as well as a lower ceiling. On a first visit the profile is
+     at its tallest - the hint and four empty chips - and a 12vh floor here put
+     the composer below the fold on a 667px screen, which it was not before the
+     week arrived. Small enough to give the composer its place back, large
+     enough that the conversation is still a conversation and not a sliver. */
+  .log {
+    min-height: 6vh;
+    max-height: 15vh;
+  }
+}
+
+.plan-title {
+  margin: 0;
+  font-size: var(--step-body);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.plan-total {
+  margin: var(--sp-xs) 0 var(--sp-md);
+  font-size: var(--step-label);
+  color: var(--text-muted);
+}
+
+.plan-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+}
+
+.plan-list li {
+  display: flex;
+  /* The note below is flex: 1 0 100%, which only drops onto its own line if the
+     row is allowed to wrap. Without this it overflowed the panel instead - the
+     kind of break that looks fine on a wide screen and only shows up on a
+     phone, which is where this panel is actually read. */
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-sm) var(--sp-sm);
+  padding: var(--sp-xs) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--outline) 45%, transparent);
+}
+
+.plan-list li:last-child {
+  border-bottom: 0;
+}
+
+.plan-day {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--step-label);
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.plan-km {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The kind of session, when the coach named one. Its own line on a narrow
+   column so a long one never squeezes the distance out of view. */
+.plan-note {
+  flex: 1 0 100%;
+  font-size: 0.75rem;
+  color: var(--outline-strong);
+}
+
+/* The strip. Seven equal columns, always: a week with one session and a week
+   with six have to be comparable at a glance, which they are not if the cells
+   resize to fit. */
+.week {
+  margin-top: var(--sp-md);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-xs) 1px;
+  border-radius: 6px;
+  background: var(--surface-high);
+  border: 1px solid var(--outline);
+}
+
+.day-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.day-km {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* Rest is a state, not an empty cell: an unstyled gap reads as a rendering bug,
+   and the day off is the part of a plan people quietly skip. */
+.day[data-rest="true"] {
+  background: transparent;
+  border-style: dashed;
+}
+
+.day[data-rest="true"] .day-km {
+  color: var(--outline-strong);
 }

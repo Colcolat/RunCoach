@@ -126,34 +126,47 @@ async def _pump_model(
 
         if content.turn_complete:
             if session_id:
-                said = _persist_turn(coach, session_id, spoken)
-                # Reading the profile is a side effect of the turn, so it runs
-                # detached: awaiting it here would hold up the audio pump, and
-                # this is a live conversation where that is audible.
-                if said:
-                    task = asyncio.create_task(
-                        _read_profile_from_speech(websocket, coach, session_id, said)
-                    )
+                said, answered = _persist_turn(coach, session_id, spoken)
+                # Both readings are side effects of the turn, so they run
+                # detached: awaiting either here would hold up the audio pump,
+                # and this is a live conversation where that is audible.
+                for coro in (
+                    _read_profile_from_speech(websocket, coach, session_id, said)
+                    if said
+                    else None,
+                    _read_plan_from_speech(websocket, coach, session_id, answered)
+                    if answered
+                    else None,
+                ):
+                    if coro is None:
+                        continue
+                    task = asyncio.create_task(coro)
                     background.add(task)
                     task.add_done_callback(background.discard)
             spoken = {"user": [], "coach": []}
             await websocket.send_json({"type": "turn_complete"})
 
 
-def _persist_turn(coach: CoachAgent, session_id: str, spoken: dict) -> str:
+def _persist_turn(coach: CoachAgent, session_id: str, spoken: dict) -> tuple[str, str]:
     """Write a completed spoken exchange into the same history as the text chat.
 
-    Returns what the runner said, which is the half worth reading a profile out
-    of: the coach's own words are not facts about the runner.
+    Returns both halves, because they are read for different things and reading
+    either one for the other would be wrong. The runner's words carry facts
+    about the runner; the coach's words carry the week. Asking the profile
+    extractor to read the coach would have it store the plan's numbers as the
+    runner's current volume, which is exactly the mistake the persona spends a
+    paragraph warning itself against.
     """
-    said = ""
+    said = answered = ""
     for role, key in (("user", "user"), ("assistant", "coach")):
         text = "".join(spoken[key]).strip()
         if text:
             coach.remember_voice_turn(session_id, role, text)
             if role == "user":
                 said = text
-    return said
+            else:
+                answered = text
+    return said, answered
 
 
 async def _read_profile_from_speech(
@@ -169,6 +182,22 @@ async def _read_profile_from_speech(
             await websocket.send_json({"type": "profile_updated"})
     except Exception:  # noqa: BLE001 - a side effect must never end the call
         logger.exception("Reading a profile from speech failed")
+
+
+async def _read_plan_from_speech(
+    websocket: WebSocket, coach: CoachAgent, session_id: str, answered: str
+) -> None:
+    """Fill the week panel from a plan the coach spoke aloud.
+
+    Sends `profile_updated` rather than a message of its own: on the client that
+    already means "read the panel again", and the panel is one thing. A second
+    message type doing the identical work would be two names for one event.
+    """
+    try:
+        if await coach.read_spoken_plan(session_id, answered):
+            await websocket.send_json({"type": "profile_updated"})
+    except Exception:  # noqa: BLE001 - a side effect must never end the call
+        logger.exception("Reading a plan from speech failed")
 
 
 @router.websocket("/ws/voice")

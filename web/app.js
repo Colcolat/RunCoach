@@ -147,6 +147,86 @@ function raceCountdown(weeks) {
   return `faltan ${weeks} semanas`;
 }
 
+// --- the week ----------------------------------------------------------------
+
+// 1 = Monday, matching what the server stores. Days are integers rather than
+// names because the coach answers in whatever language it is spoken to, and a
+// week given in English has to fill the same panel as one given in Spanish.
+const DAY_NAMES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+const DAY_INITIALS = ["L", "M", "X", "J", "V", "S", "D"];
+
+function renderPlan(sessions, totalKm) {
+  const panel = el("plan");
+  if (!sessions || sessions.length === 0) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+
+  el("plan-total").textContent = `${totalKm} km repartidos en ${sessions.length} ${
+    sessions.length === 1 ? "día" : "días"
+  }`;
+
+  const list = el("plan-list");
+  list.replaceChildren(
+    ...sessions.map((session) => {
+      const item = document.createElement("li");
+
+      const day = document.createElement("span");
+      day.className = "plan-day";
+      day.textContent = DAY_NAMES[session.day - 1] || "";
+
+      const distance = document.createElement("span");
+      distance.className = "plan-km";
+      distance.textContent = `${session.km} km`;
+
+      item.append(day, distance);
+
+      if (session.note) {
+        const note = document.createElement("span");
+        note.className = "plan-note";
+        note.textContent = session.note;
+        item.append(note);
+      }
+      return item;
+    })
+  );
+
+  // The strip covers all seven days, so a rest day is visibly a rest day rather
+  // than an absence the eye has to notice.
+  const byDay = new Map(sessions.map((session) => [session.day, session]));
+  el("week").replaceChildren(
+    ...DAY_INITIALS.map((initial, index) => {
+      const day = index + 1;
+      const session = byDay.get(day);
+
+      const cell = document.createElement("div");
+      cell.className = "day";
+      cell.setAttribute("role", "listitem");
+      cell.dataset.rest = session ? "false" : "true";
+      cell.setAttribute(
+        "aria-label",
+        session
+          ? `${DAY_NAMES[index]}, ${session.km} kilómetros`
+          : `${DAY_NAMES[index]}, descanso`
+      );
+
+      const label = document.createElement("span");
+      label.className = "day-label";
+      label.textContent = initial;
+
+      const value = document.createElement("span");
+      value.className = "day-km";
+      // A dot, not the word: the strip is read at a glance and "descanso"
+      // wrapped across two lines in a cell this size.
+      value.textContent = session ? session.km : "·";
+
+      cell.append(label, value);
+      return cell;
+    })
+  );
+}
+
 async function refreshProfile() {
   let data;
   try {
@@ -168,6 +248,7 @@ async function refreshProfile() {
   ].some(Boolean);
 
   el("profile").dataset.known = known ? "true" : "false";
+  renderPlan(data.plan, data.plan_total_km);
   renderTelegram(data);
 }
 
@@ -407,6 +488,12 @@ async function sendText(event) {
     addBubble("coach", data.reply, { notice: data.degraded });
     setState("idle", data.degraded ? "Respuesta de respaldo" : "Listo para hablar o escribir");
     if (!data.degraded) refreshProfile();
+
+    // The week is read from the coach's own reply, which means the extraction
+    // starts only once the reply exists and finishes after the refresh above.
+    // One more look, rather than a poll: if it is still not there the next turn
+    // picks it up, and a panel is not worth a timer that never stops.
+    if (data.plan_pending) setTimeout(refreshProfile, 2500);
   } catch (error) {
     addBubble("coach", "No pude conectar con el entrenador. Intenta de nuevo.", {
       notice: true,

@@ -18,10 +18,10 @@ import logging
 from datetime import datetime
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from src.database import session_scope
-from src.models import ROLES, Base, Conversation, Message, Reminder, User
+from src.models import ROLES, Base, Conversation, Message, Reminder, TrainingPlan, User
 from src.models.base import utcnow
 from src.database import get_engine
 
@@ -225,6 +225,49 @@ def set_daily_reminder(user_id: int, at_time: str) -> int:
         return reminder.id
 
 
+def set_plan_reminder(user_id: int, at_time: str, *, eve: bool = False) -> int:
+    """Set, or move, this runner's training-day reminder.
+
+    One of each kind, and setting one clears the other: "recuérdame la víspera"
+    after "recuérdame por la mañana" is a change of mind, not a request for two
+    messages about the same run.
+    """
+    kind = "plan_eve" if eve else "plan_today"
+    other = "plan_today" if eve else "plan_eve"
+
+    with session_scope() as session:
+        for row in session.scalars(
+            select(Reminder).where(Reminder.user_id == user_id, Reminder.kind == other)
+        ):
+            row.enabled = False
+
+        stmt = select(Reminder).where(
+            Reminder.user_id == user_id, Reminder.kind == kind
+        )
+        reminder = session.scalars(stmt).first()
+        if reminder is None:
+            reminder = Reminder(user_id=user_id, kind=kind)
+            session.add(reminder)
+        reminder.at_time = at_time
+        reminder.enabled = True
+        session.flush()
+        return reminder.id
+
+
+def plan_reminder(user_id: int) -> dict | None:
+    """This runner's training-day reminder, if they set one."""
+    with session_scope() as session:
+        stmt = select(Reminder).where(
+            Reminder.user_id == user_id,
+            Reminder.kind.in_(("plan_today", "plan_eve")),
+            Reminder.enabled.is_(True),
+        )
+        reminder = session.scalars(stmt).first()
+        if reminder is None:
+            return None
+        return {"at_time": reminder.at_time, "eve": reminder.kind == "plan_eve"}
+
+
 def ensure_inactivity_reminder(user_id: int) -> int:
     """Every runner gets one, created the first time they are seen."""
     with session_scope() as session:
@@ -252,6 +295,12 @@ def pending_reminders() -> list[dict]:
             select(Reminder, User)
             .join(User, Reminder.user_id == User.id)
             .where(Reminder.enabled.is_(True), User.telegram_id.is_not(None))
+            # Without this, reading user.plan below lazy-loads one row at a
+            # time: measured at twenty reminders it was twenty-one queries,
+            # twenty of them to training_plans. The sweep runs every minute and
+            # touches every reminder in the system, so it is the one query in
+            # this module whose shape actually scales with users.
+            .options(joinedload(User.plan))
         )
         return [
             {
@@ -263,6 +312,14 @@ def pending_reminders() -> list[dict]:
                 "telegram_id": user.telegram_id,
                 "last_seen_at": user.last_seen_at,
                 "profile": _user_to_dict(user),
+                # Only the plan kinds read this, but it is loaded here so the
+                # sweep stays a pure decision over the rows it was handed
+                # rather than reaching back into the database mid-loop.
+                "sessions": (
+                    list(user.plan.sessions)
+                    if user.plan is not None and isinstance(user.plan.sessions, list)
+                    else []
+                ),
             }
             for reminder, user in session.execute(stmt).all()
         ]
@@ -293,3 +350,46 @@ def touch_last_seen(user_id: int) -> None:
         user = session.get(User, user_id)
         if user is not None:
             user.last_seen_at = utcnow()
+
+
+# --- the week's plan (F9) -----------------------------------------------------
+
+def save_plan(user_id: int, sessions: list[dict]) -> None:
+    """Replace this runner's week.
+
+    Refuses an empty list rather than storing it. An extraction that found
+    nothing means the coach was not laying out a week this turn, which is not
+    the same as the week being over, and wiping the panel because someone asked
+    an unrelated question is the one failure mode a runner would actually
+    notice.
+    """
+    if not sessions:
+        return
+
+    with session_scope() as session:
+        plan = session.scalar(
+            select(TrainingPlan).where(TrainingPlan.user_id == user_id)
+        )
+        if plan is None:
+            session.add(TrainingPlan(user_id=user_id, sessions=sessions))
+            return
+        # Reassigned, never mutated in place. SQLAlchemy instruments the
+        # attribute, so `plan.sessions = ...` is seen and written; appending to
+        # the existing list is not, and is silently lost at commit. Measured
+        # both ways rather than assumed. Keeping every write a reassignment is
+        # what makes flag_modified unnecessary here.
+        plan.sessions = sessions
+        # updated_at moves itself: the column carries onupdate=utcnow, which
+        # fires because the row above is now dirty. An explicit nudge here was
+        # doing nothing but claiming it was needed.
+
+
+def get_plan(user_id: int) -> list[dict]:
+    """This runner's week, or an empty list when there is none yet."""
+    with session_scope() as session:
+        plan = session.scalar(
+            select(TrainingPlan).where(TrainingPlan.user_id == user_id)
+        )
+        if plan is None or not isinstance(plan.sessions, list):
+            return []
+        return list(plan.sessions)

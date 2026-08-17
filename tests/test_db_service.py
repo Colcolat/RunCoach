@@ -24,6 +24,7 @@ def test_every_table_shares_one_metadata_registry():
         "conversations",
         "messages",
         "reminders",
+        "training_plans",
     }
 
 

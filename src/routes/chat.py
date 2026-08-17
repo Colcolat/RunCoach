@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.coach_agent import CoachAgent
 from src.services.telegram_service import TelegramService
+from src.coaching.plan import week_total
 from src.coaching.prompts import weeks_until
 from src.dependencies import get_coach, get_limiter, get_telegram
 from src.ratelimit import TurnLimiter
@@ -66,6 +67,9 @@ class ChatResponse(BaseModel):
     session_id: str
     conversation_id: int | None = None
     degraded: bool = False
+    # This reply looked like a week, and the panel is being filled in behind the
+    # response rather than holding it up. The client looks again shortly.
+    plan_pending: bool = False
 
 
 class WelcomeResponse(BaseModel):
@@ -76,6 +80,14 @@ class WelcomeResponse(BaseModel):
 class HistoryResponse(BaseModel):
     session_id: str
     messages: list[dict[str, str]]
+
+
+class PlanSession(BaseModel):
+    """One day of the week the coach laid out. Days are 1=Monday..7=Sunday."""
+
+    day: int
+    km: float
+    note: str | None = None
 
 
 class ProfileResponse(BaseModel):
@@ -102,6 +114,11 @@ class ProfileResponse(BaseModel):
     telegram_linked: bool = False
     telegram_url: str | None = None
     reminder_at: str | None = None
+    # The week's sessions, in day order, and their sum. The total is computed
+    # from the sessions rather than stored, so the panel can never show a total
+    # that disagrees with the days printed underneath it.
+    plan: list[PlanSession] = []
+    plan_total_km: float = 0.0
 
 
 @router.get("/welcome", response_model=WelcomeResponse)
@@ -151,6 +168,7 @@ async def chat(
         session_id=session_id,
         conversation_id=reply.conversation_id,
         degraded=reply.degraded,
+        plan_pending=reply.plan_pending,
     )
 
 
@@ -191,6 +209,8 @@ def profile(
             session_id=session_id, telegram_url=telegram.deep_link(session_id)
         )
 
+    sessions = db_service.get_plan(user["id"])
+
     return ProfileResponse(
         session_id=session_id,
         username=user["username"],
@@ -202,4 +222,6 @@ def profile(
         telegram_linked=user["telegram_id"] is not None,
         telegram_url=telegram.deep_link(session_id),
         reminder_at=db_service.daily_reminder_time(user["id"]),
+        plan=[PlanSession(**session) for session in sessions],
+        plan_total_km=week_total(sessions),
     )

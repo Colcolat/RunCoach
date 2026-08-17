@@ -11,7 +11,7 @@ persist, because the state was never in the scheduler.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -22,6 +22,9 @@ from src.coaching.reminders import (
     days_silent,
     inactivity_is_due,
     inactivity_message,
+    plan_is_due,
+    plan_message,
+    session_on,
 )
 from src.config import get_settings
 from src.services import db_service
@@ -86,12 +89,35 @@ async def run_due_reminders(telegram: TelegramService) -> int:
     return sent
 
 
+def _local_date(now: datetime, tz: ZoneInfo) -> date:
+    """Today in the runner's zone, which is the only "today" a reminder means."""
+    return now.astimezone(tz).date()
+
+
 def _due_text(row: dict, now: datetime, tz: ZoneInfo, settings) -> str | None:
     """The message this reminder should send now, or None if it is not due."""
     if row["kind"] == "daily":
         if daily_is_due(row["at_time"], row["last_sent_at"], now, tz):
             return daily_message(row["profile"])
         return None
+
+    # The two training-day kinds differ only in which day they speak about, so
+    # they share everything except that offset.
+    if row["kind"] in ("plan_today", "plan_eve"):
+        days_ahead = 1 if row["kind"] == "plan_eve" else 0
+        sessions = row.get("sessions") or []
+        if not plan_is_due(
+            row["at_time"], row["last_sent_at"], now, tz, sessions, days_ahead
+        ):
+            return None
+
+        target = _local_date(now, tz) + timedelta(days=days_ahead)
+        session = session_on(sessions, target)
+        # plan_is_due already established there is one; this keeps the type
+        # honest rather than trusting that across two calls.
+        if session is None:
+            return None
+        return plan_message(session, row["profile"], days_ahead)
 
     if row["kind"] == "inactivity":
         if inactivity_is_due(

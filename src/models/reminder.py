@@ -23,8 +23,16 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.models.base import Base, utcnow
 
 # What prompted the reminder. `daily` is the time the runner asked for out loud;
-# `inactivity` is the coach noticing they have gone quiet.
-REMINDER_KINDS = ("daily", "inactivity")
+# `inactivity` is the coach noticing they have gone quiet. The two plan kinds
+# (F9) are tied to the week in the panel: `plan_today` fires on the days that
+# have a session, `plan_eve` fires the evening before one.
+#
+# Two kinds rather than one kind with an offset column, because the offset is
+# the only thing that would differ and create_schema only creates missing
+# tables - a new column would need a migration this project has deliberately not
+# taken on. The cost is that "three days before" is not expressible, which
+# nobody has asked for.
+REMINDER_KINDS = ("daily", "inactivity", "plan_today", "plan_eve")
 
 
 class Reminder(Base):

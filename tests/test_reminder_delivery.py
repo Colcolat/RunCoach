@@ -373,3 +373,146 @@ def test_speaking_counts_too(coach):
 def _aware(moment):
     from zoneinfo import ZoneInfo
     return moment if moment.tzinfo else moment.replace(tzinfo=ZoneInfo("UTC"))
+
+
+# --- reminders that follow the plan (F9) --------------------------------------
+#
+# The daily reminder fires every morning whether or not there is anything to do.
+# These fire only on the days the week actually has a session, or the evening
+# before one, which is what "recuérdame la rutina un día antes del día de
+# ejercicio" asks for.
+
+SEMANA = [
+    {"day": 2, "km": 5.0, "note": "suaves"},    # martes
+    {"day": 7, "km": 9.0, "note": "tirada larga"},  # domingo
+]
+
+
+def _at(day: str, hour: int = 7) -> datetime:
+    """An instant on a named weekday, at that hour *in the runner's zone*.
+
+    Built local and converted, not the other way round. A reminder set for seven
+    in the morning means seven where the runner is, and an instant built in UTC
+    lands at one in the morning in Mexico City - which is how the first version
+    of these tests failed while the code was right.
+    """
+    from zoneinfo import ZoneInfo
+
+    dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    # 17 Aug 2026 is a Monday, so the index lands on the right weekday.
+    local = datetime(
+        2026, 8, 17 + dias.index(day), hour, 0,
+        tzinfo=ZoneInfo("America/Mexico_City"),
+    )
+    return local.astimezone(timezone.utc)
+
+
+def _entrenos(telegram) -> list[str]:
+    """Only the training-day messages.
+
+    The sweep runs every reminder a runner has, and freezing the clock days into
+    the future also makes them look silent, so the inactivity nudge legitimately
+    goes out alongside. Counting everything the sweep sent would make these
+    tests about the sweep; they are about one kind of reminder.
+    """
+    return [text for _, text in telegram.sent if "toca entrenar" in text]
+
+
+@pytest.mark.asyncio
+async def test_a_training_day_reminder_fires_on_a_training_day(telegram, monkeypatch):
+    user = a_runner(goal="10K")
+    db_service.save_plan(user["id"], SEMANA)
+    db_service.set_plan_reminder(user["id"], "07:00")
+
+    monkeypatch.setattr("src.scheduler.datetime", _FrozenClock(_at("martes")))
+    await run_due_reminders(telegram)
+
+    assert len(_entrenos(telegram)) == 1
+    assert "5 kilómetros" in _entrenos(telegram)[0]
+
+
+@pytest.mark.asyncio
+async def test_it_stays_quiet_on_a_rest_day(telegram, monkeypatch):
+    """The whole difference from the daily reminder. A message on a rest day is
+    the reason someone turns reminders off."""
+    user = a_runner()
+    db_service.save_plan(user["id"], SEMANA)
+    db_service.set_plan_reminder(user["id"], "07:00")
+
+    monkeypatch.setattr("src.scheduler.datetime", _FrozenClock(_at("miércoles")))
+    await run_due_reminders(telegram)
+
+    assert _entrenos(telegram) == []
+
+
+@pytest.mark.asyncio
+async def test_the_eve_reminder_speaks_about_tomorrow(telegram, monkeypatch):
+    """"recuérdame la rutina un día antes del día de ejercicio", which is what
+    was actually asked for."""
+    user = a_runner(goal="10K")
+    db_service.save_plan(user["id"], SEMANA)
+    db_service.set_plan_reminder(user["id"], "21:00", eve=True)
+
+    # Saturday evening, the night before Sunday's long run.
+    monkeypatch.setattr("src.scheduler.datetime", _FrozenClock(_at("sábado", 21)))
+    await run_due_reminders(telegram)
+
+    enviados = _entrenos(telegram)
+    assert len(enviados) == 1
+    assert "Mañana" in enviados[0]
+    assert "9 kilómetros" in enviados[0]
+
+
+@pytest.mark.asyncio
+async def test_the_eve_reminder_is_quiet_the_night_before_a_rest_day(telegram, monkeypatch):
+    user = a_runner()
+    db_service.save_plan(user["id"], SEMANA)
+    db_service.set_plan_reminder(user["id"], "21:00", eve=True)
+
+    # Sunday night: Monday is a rest day.
+    monkeypatch.setattr("src.scheduler.datetime", _FrozenClock(_at("domingo", 21)))
+    await run_due_reminders(telegram)
+
+    assert _entrenos(telegram) == []
+
+
+@pytest.mark.asyncio
+async def test_a_runner_with_no_plan_gets_no_training_day_reminders(telegram, monkeypatch):
+    """Nothing to remind them about yet, so nothing is sent - rather than a
+    message that names no distance."""
+    user = a_runner()
+    db_service.set_plan_reminder(user["id"], "07:00")
+
+    monkeypatch.setattr("src.scheduler.datetime", _FrozenClock(_at("martes")))
+    await run_due_reminders(telegram)
+
+    assert _entrenos(telegram) == []
+
+
+def test_choosing_the_eve_replaces_the_same_day_reminder():
+    """A change of mind, not a request for two messages about one run."""
+    user = a_runner()
+    db_service.set_plan_reminder(user["id"], "07:00")
+    db_service.set_plan_reminder(user["id"], "21:00", eve=True)
+
+    assert db_service.plan_reminder(user["id"]) == {"at_time": "21:00", "eve": True}
+    activos = [r["kind"] for r in db_service.pending_reminders()]
+    assert "plan_today" not in activos
+
+
+class _FrozenClock:
+    """Stops the sweep's clock on a chosen instant.
+
+    The sweep reads `datetime.now(timezone.utc)`; only that needs replacing, and
+    everything else on the class is passed straight through so the module keeps
+    working normally.
+    """
+
+    def __init__(self, moment: datetime) -> None:
+        self._moment = moment
+
+    def now(self, tz=None):
+        return self._moment.astimezone(tz) if tz else self._moment
+
+    def __getattr__(self, name):
+        return getattr(datetime, name)

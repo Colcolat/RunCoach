@@ -21,10 +21,19 @@ from src.coaching.extraction import (
     EXTRACTION_SCHEMA,
     HISTORY_TURNS,
     REMINDER_FIELD,
+    SCOPE_FIELD,
     build_extraction_prompt,
     clean,
     mentions_profile_information,
 )
+from src.coaching.plan import (
+    PLAN_PROMPT,
+    PLAN_SCHEMA,
+    looks_like_a_plan,
+    replaces_the_week,
+)
+from src.coaching.plan import clean as clean_plan
+from src.coaching.plan import merge as merge_plan
 from src.coaching.prompts import build_system_prompt, welcome_message
 from src.config import get_settings
 from src.services import db_service
@@ -51,6 +60,11 @@ RATE_LIMITED_MESSAGE = (
 )
 
 
+# asyncio holds only a weak reference to a task, so one that nobody keeps can be
+# collected mid-flight. Same set, same reason, as the voice route.
+_background: set[asyncio.Task] = set()
+
+
 @dataclass(frozen=True)
 class CoachReply:
     """A reply, plus whether it came from the model or from a fallback."""
@@ -58,6 +72,10 @@ class CoachReply:
     text: str
     degraded: bool = False
     conversation_id: int | None = None
+    # True when this reply looked like a week and the panel is being filled in
+    # behind the response. The client uses it to look again in a moment rather
+    # than poll forever, and it is why the reply is not held up waiting.
+    plan_pending: bool = False
 
 
 class CoachAgent:
@@ -132,9 +150,7 @@ class CoachAgent:
             # A requested reminder time is not a profile column, it is a row in
             # `reminders`. Taken out here so update_profile keeps receiving only
             # things that belong on the user.
-            at_time = updates.pop(REMINDER_FIELD, None)
-            if at_time:
-                self._db.set_daily_reminder(user["id"], at_time)
+            self._set_reminder(user["id"], updates)
 
             # This turn's reply was composed against the profile as it was
             # before, which costs nothing: the model already saw the runner say
@@ -156,9 +172,96 @@ class CoachAgent:
         # told "hace unos días que no hablamos" while talking every morning.
         self._db.touch_last_seen(user["id"])
 
+        # Reading the week costs a request and about a second, and the runner is
+        # already looking at the answer. It lands in the panel a moment later.
+        pending = not reply.degraded and looks_like_a_plan(reply.text)
+        if pending:
+            task = asyncio.create_task(self.read_plan(user["id"], reply.text))
+            _background.add(task)
+            task.add_done_callback(_background.discard)
+
         return CoachReply(
-            text=reply.text, degraded=reply.degraded, conversation_id=conversation_id
+            text=reply.text,
+            degraded=reply.degraded,
+            conversation_id=conversation_id,
+            plan_pending=pending,
         )
+
+    def _set_reminder(self, user_id: int, updates: dict) -> None:
+        """Turn a requested reminder into the right kind of row.
+
+        Taken out of the profile updates rather than written to the user, since
+        a reminder is a row in `reminders`. The scope decides which kind: asking
+        to be nudged on training days, or the evening before one, is a different
+        thing from asking for a nudge every morning, and answering all three
+        with the daily reminder is what made "recuérdame un día antes del día de
+        ejercicio" quietly become "recuérdame todos los días".
+        """
+        at_time = updates.pop(REMINDER_FIELD, None)
+        scope = updates.pop(SCOPE_FIELD, None)
+        if not at_time:
+            return
+
+        if scope == "vispera":
+            self._db.set_plan_reminder(user_id, at_time, eve=True)
+        elif scope == "dias_de_entreno":
+            self._db.set_plan_reminder(user_id, at_time, eve=False)
+        else:
+            self._db.set_daily_reminder(user_id, at_time)
+
+    async def read_plan(self, user_id: int, reply: str) -> list[dict]:
+        """Read the week's sessions out of a reply the coach just gave.
+
+        Returns the sessions it stored, or an empty list. Never raises, for the
+        same reason profile extraction never raises: this fills a panel, and the
+        runner already has the answer they asked for.
+
+        Deliberately not awaited before the reply goes out. The turn that
+        contains a plan is exactly the turn a runner is waiting on, and this
+        module already refuses to spend latency it does not have to - the
+        profile call runs beside the reply rather than after it for the same
+        reason. Here that is not possible, since the text being read is the
+        reply, so the call runs behind it instead.
+        """
+        if not get_settings().plan_extraction_enabled:
+            return []
+        if not looks_like_a_plan(reply):
+            # No two weekdays, so no week was laid out. Most turns look like
+            # this, and each one skipped is a request left in the day's budget.
+            return []
+
+        try:
+            raw = await self._gemini.extract(
+                message=reply,
+                system_prompt=PLAN_PROMPT,
+                schema=PLAN_SCHEMA,
+                history=None,
+            )
+        except GeminiUnavailableError:
+            logger.warning("Plan extraction unavailable; the panel keeps the old week")
+            return []
+        except Exception:  # noqa: BLE001 - a panel must never cost a conversation
+            logger.exception("Plan extraction failed")
+            return []
+
+        sessions = clean_plan(raw)
+        if not sessions:
+            return []
+
+        try:
+            # A reply that only speaks about part of a week folds into what is
+            # already stored. Replacing on every mention of two days is what
+            # turned "mantén el sábado de tres y el domingo de nueve" into a
+            # twelve-kilometre week, silently deleting the Tuesday and Thursday
+            # the runner was still meant to run.
+            if not replaces_the_week(raw):
+                sessions = merge_plan(self._db.get_plan(user_id), sessions)
+            self._db.save_plan(user_id, sessions)
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not save the week's plan")
+            return []
+
+        return sessions
 
     async def _read_profile(
         self, message: str, history: list[dict[str, str]] | None
@@ -234,9 +337,7 @@ class CoachAgent:
 
         try:
             user = self._db.get_or_create_user(web_session_id=web_session_id)
-            at_time = updates.pop(REMINDER_FIELD, None)
-            if at_time:
-                self._db.set_daily_reminder(user["id"], at_time)
+            self._set_reminder(user["id"], updates)
             if updates:
                 self._db.update_profile(user["id"], **updates)
         except Exception:  # noqa: BLE001
@@ -244,6 +345,25 @@ class CoachAgent:
             return {}
 
         return updates
+
+    async def read_spoken_plan(self, web_session_id: str, reply: str) -> list[dict]:
+        """Read the week out of something the coach said out loud.
+
+        Voice is the headline of this product, so a week given by speaking has
+        to reach the panel exactly as one given in writing does. Without this the
+        panel would fill in for people who type and stay empty for the people
+        using the feature the whole thing was built around.
+
+        Resolves the runner here rather than making the caller do it, mirroring
+        read_spoken_profile: the voice route holds a session id, not a user row.
+        """
+        try:
+            user = self._db.get_or_create_user(web_session_id=web_session_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not load a runner to store a spoken plan")
+            return []
+
+        return await self.read_plan(user["id"], reply)
 
     def remember_voice_turn(
         self, web_session_id: str, role: str, content: str
